@@ -71,7 +71,7 @@ namespace PowerLanguage.Strategy
             if (currTime == 0430 && Count < 3)
             {
                 BuyMktOrder.Send(100000);
-                PrintStrategyReport();
+                //PrintStrategyReport();
                 Count++;
                 Output.WriteLine("");
             }
