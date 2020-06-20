@@ -20,6 +20,7 @@ namespace PowerLanguage.Strategy
 
     /*  ----------------------------------- Version History -----------------------------------
      *   v.1.0
+     *   - Using Version Control
      *  ----------------------------------- Version History -----------------------------------
      
 
