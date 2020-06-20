@@ -53,7 +53,7 @@ namespace PowerLanguage.Strategy
         }
         protected override void StartCalc()
         {
-
+            Print("With Source Control");
         }
         private int Count;
         protected override void CalcBar()
