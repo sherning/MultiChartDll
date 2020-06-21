@@ -212,7 +212,6 @@
     <Compile Include="Stochastic_SlowK.Indicator.CS" />
     <Compile Include="TRIX.Indicator.CS" />
     <Compile Include="Chaos_AC_Oscillator.Indicator.CS" />
-    <Compile Include="Absolute_Breadth.Indicator.CS" />
     <Compile Include="New_High_for_Year.Indicator.CS" />
     <Compile Include="Chaos_Fractals.Indicator.CS" />
     <Compile Include="C_ShootingStar.Indicator.CS" />
