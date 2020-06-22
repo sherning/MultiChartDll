@@ -150,8 +150,15 @@ namespace PowerLanguage.Indicator
                     // if not on continue
                     if (PamaPlotSwitch[i] != 1) continue;
 
-                    if (PamaPrice[i][0] > 0)
+                    if (PamaPrice[i][1] > 0)
                         PamaPlots[i].Set(1, PamaPrice[i][1], Color.Yellow);
+                }
+
+                for (int i = 0; i < Timeframes; i++)
+                {
+                    Print("Timeframe: " + i);
+                    Print("PamaPrice[0]: " + PamaPrice[i][0]);
+                    Print("PamaPrice[1]: " + PamaPrice[i][1]);
                 }
 
             }
