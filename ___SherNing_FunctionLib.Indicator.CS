@@ -148,6 +148,7 @@ namespace PowerLanguage.Function
 
         // class fields
         private double[] DataSet;
+        private int Count;
 
         // class constructor
         public StandardDeviationCalculator(CStudyControl m) : base(m)
@@ -159,6 +160,11 @@ namespace PowerLanguage.Function
             // ensure that length is at least 1.
             if (_Length < 1) _Length = 1;
 
+            // Data set for manual entry
+            DataSet = new double[_Length];
+
+            // reset count
+            Count = 0;
         }
         protected override double CalcBar()
         {
@@ -181,28 +187,68 @@ namespace PowerLanguage.Function
             // std dev = sqrt(variance)
             return Math.Sqrt(variance);
         }
+
+        public void Add(double data)
+        {
+            // shift all the data back by 1
+            for (int i = _Length - 1; i > 0; i--)
+                DataSet[i] = DataSet[i - 1];
+
+            // Add newest data to the front
+            DataSet[0] = data;
+
+            // Count number of data added.
+            Count++;
+
+            if (Count > _Length) Count--;
+        }
+
+        public double Calculate()
+        {
+            double mean = 0;
+            for (int i = 0; i < _Length; i++)
+                mean += DataSet[i];
+
+            // mean = total sum / length
+            mean /= _Length;
+
+            // calculate variance sigma ^ 2
+            double variance = 0;
+            for (int i = 0; i < _Length; i++)
+                variance += Math.Pow(DataSet[i] - mean, 2);
+
+            // calculate population variance
+            if (_PopulationStdDev) variance /= _Length;
+            else variance /= (_Length - 1);
+
+            // std dev = sqrt(variance)
+            return Math.Sqrt(variance);
+        }
     }
 
     #endregion
 
     #region Moving Average Pivots
-    //==============================================================================
-    // Name           : MovingAveragePivots
-    // Description    : Find the pivot value for a given moving average.
-    // Version        : v.1.0.0
-    // Date Created   : 20 - May - 2020
+    //==========================================================================================
+    // Name           : Moving Average Pivots
+    // Description    : Returns the pivot value for a given length and set of data
+    // Version        : v.1.0
+    // Date Created   : 22 - Jun - 2020
     // Time Taken     : 
     // Remarks        :
-    //==============================================================================
+    //==========================================================================================
     // Copyright      : 2020, Sher Ning Technologies           
     // License        :      
-    //==============================================================================
+    //==========================================================================================
 
-    /* ------------------------------- Version 1.1 -------------------------------
-     *  v1.0
-     *  Remember to explicitly Call() for FunctionSimple if we are not using the 
-     *  return value.
-     *  
+    /*  ----------------------------------- Version History -----------------------------------
+     *  v.1.0
+     *  - 
+     *  ----------------------------------- Version History -----------------------------------
+
+     *  ---------------------------------------- Notes ----------------------------------------
+     *  - 
+     *  ---------------------------------------- Notes ----------------------------------------
      */
 
     public sealed class MovingAveragePivot : FunctionSeries<string>
@@ -283,6 +329,10 @@ namespace PowerLanguage.Function
             LowestLow.Value = minValue;
         }
 
+        #region Manual Mode
+
+        #endregion
+
         #region Print Functions
         private bool DebugMode = true;
         private void Print(string message)
@@ -300,7 +350,6 @@ namespace PowerLanguage.Function
                 message);
         }
         #endregion
-
     }
 
     #endregion
