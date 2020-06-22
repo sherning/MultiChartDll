@@ -4494,12 +4494,12 @@ namespace PowerLanguage.Indicator
      *   
      *  ---------------------------------------- Notes ----------------------------------------
      */
-    public class ___SNi_Framework : IndicatorObject
+    public class ___SherNing_FunctionLib : IndicatorObject
     {
         // class properties
         [Input] public int Length { get; set; }
 
-        public ___SNi_Framework(object _ctx) : base(_ctx)
+        public ___SherNing_FunctionLib (object _ctx) : base(_ctx)
         {
             Length = 6;
         }

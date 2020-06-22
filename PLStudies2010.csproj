@@ -124,8 +124,9 @@
     <Compile Include="__SherNing_PalHood.Indicator.CS" />
     <Compile Include="__SNs_StrategyTester.Strategy.CS" />
     <Compile Include="BarNumberForDateTime.Function.CS" />
-    <Compile Include="___SNi_Framework.Indicator.CS" />
     <Compile Include="__SNs_TradeManagerTest.Strategy.CS" />
+    <Compile Include="_SherNing_FunctionLib.Indicator.CS" />
+    <Compile Include="___SherNing_FunctionLib.Indicator.CS" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>
