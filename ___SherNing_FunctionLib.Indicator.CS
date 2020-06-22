@@ -115,32 +115,41 @@ namespace PowerLanguage.Function
     #endregion
 
     #region Standard Deviation
-    //==============================================================================
-    // Name           : StandardDeviationCalculator
-    // Description    : Calculates the Std Dev for a given length
-    // Version        : v.1.0.0
-    // Date Created   : 20 - May - 2020
+    //==========================================================================================
+    // Name           : Standard Deviation Calculator
+    // Description    : Returns the std dev for a given length over a given set of values
+    // Version        : v.1.0
+    // Date Created   : 22 - Jun - 2020
     // Time Taken     : 
     // Remarks        :
-    //==============================================================================
+    //==========================================================================================
     // Copyright      : 2020, Sher Ning Technologies           
     // License        :      
-    //==============================================================================
+    //==========================================================================================
 
-    /* ------------------------------- Version 1.1 -------------------------------
-     * v1.0
-     * Population Std Dev = true, calculates population, false = sample.
-     * This will not work for multi-timeframe.
-     * 
-     * 
+    /*  ----------------------------------- Version History -----------------------------------
+     *  v.1.0
+     *  - Standard Version is based on bar closed.
+     *  - Public methods if Std Dev is not calculated on every bar.
+     *  ----------------------------------- Version History -----------------------------------
+
+     *  ---------------------------------------- Notes ----------------------------------------
+     *  - 
+     *  ---------------------------------------- Notes ----------------------------------------
      */
 
     public sealed class StandardDeviationCalculator : FunctionSeries<double>
     {
+        // class properties
         public int _Length { get; set; }
         public bool _PopulationStdDev { get; set; }
         public ISeries<double> _Price { get; set; }
 
+
+        // class fields
+        private double[] DataSet;
+
+        // class constructor
         public StandardDeviationCalculator(CStudyControl m) : base(m)
         {
 
