@@ -4772,7 +4772,7 @@ namespace PowerLanguage.Indicator
         }
         protected override void StartCalc()
         {
-            ClosingTick._TimeFrame = 5;
+            ClosingTick._TimeFrame = 7;
             Print("Timeframe Selected: " + ClosingTick._TimeFrameSelected);
         }
         protected override void CalcBar()
