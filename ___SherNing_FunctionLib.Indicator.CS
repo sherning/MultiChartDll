@@ -524,27 +524,27 @@ namespace PowerLanguage.Function
             switch (timeframe)
             {
                 case 0:
-                    return "Timeframe: 5 min";
+                    return "5 min";
                 case 1:
-                    return "Timeframe: 10 min";
+                    return "10 min";
                 case 2:
-                    return "Timeframe: 15 min";
+                    return "15 min";
                 case 3:
-                    return "Timeframe: 20 min";
+                    return "20 min";
                 case 4:
-                    return "Timeframe: 30 min";
+                    return "30 min";
                 case 5:
-                    return "Timeframe: 60 min";
+                    return "60 min";
                 case 6:
-                    return "Timeframe: 120 min";
+                    return "120 min";
                 case 7:
-                    return "Timeframe: 240 min";
+                    return "240 min";
                 case 8:
-                    return "Timeframe: Daily";
+                    return "Daily";
                 case 9:
-                    return "Timeframe: Weekly";
+                    return "Weekly";
                 case 10:
-                    return "Timeframe: Monthly";
+                    return "Monthly";
             }
 
             return "Incorrect timeframe";
@@ -4763,24 +4763,15 @@ namespace PowerLanguage.Indicator
 
         // class fields
         private DeveloperTools Tools;
-        private MultiTimeFrameClosingTick ClosingTick;
         protected override void Create()
         {
             Output.Clear();
-            Tools = new DeveloperTools(this);
-            ClosingTick = new MultiTimeFrameClosingTick(this);
         }
         protected override void StartCalc()
         {
-            ClosingTick._TimeFrame = 7;
-            Print("Timeframe Selected: " + ClosingTick._TimeFrameSelected);
         }
         protected override void CalcBar()
         {
-            if (Bars.CurrentBar < 100)
-            {
-                Print("Closing Tick: " + ClosingTick.Value);
-            }
         }
 
         protected override void StopCalc()
