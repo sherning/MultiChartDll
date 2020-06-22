@@ -1530,8 +1530,6 @@ namespace PowerLanguage.Function
      */
     public sealed class PriceActionMovingAverageMTF : FunctionSeries<bool> // v15
     {
-        // Version 2.0 Update property feature.
-
         // class properties. 
         public int _Length { get; set; }
         public int _Smooth { get; set; }
@@ -1583,6 +1581,8 @@ namespace PowerLanguage.Function
             ListOfClosingTicks = new List<VariableSeries<bool>>();
             ListOfHmas = new List<HullMovingAverage>();
             ListOfHmaValues = new List<VariableSeries<double>>();
+            ClosingTicks = new List<MultiTimeFrameClosingTick>();
+            
 
             for (int i = 0; i < Timeframes; i++)
             {
@@ -1590,6 +1590,7 @@ namespace PowerLanguage.Function
                 ListOfClosingTicks.Add(new VariableSeries<bool>(this));
                 ListOfHmas.Add(new HullMovingAverage(this));
                 ListOfHmaValues.Add(new VariableSeries<double>(this));
+                ClosingTicks.Add(new MultiTimeFrameClosingTick(this));
             }
         }
         protected override void StartCalc()
@@ -1607,7 +1608,10 @@ namespace PowerLanguage.Function
 
             // Set Hma lengths for each Hma object
             for (int i = 0; i < Timeframes; i++)
+            {
                 ListOfHmas[i]._Length = _Length;
+                ClosingTicks[i]._TimeFrame = i;
+            }
 
             // disable timeframes according to chart selected.
             SetTFsForCalculationBasedOnInterval();
@@ -1624,7 +1628,8 @@ namespace PowerLanguage.Function
                 if (IsTimeFrameSelected[timeframe] != 1) continue;
 
                 // check for each individual timeframe for closing ticks
-                ListOfClosingTicks[timeframe].Value = IsTimeFrameOnCloseTick(timeframe);
+                //ListOfClosingTicks[timeframe].Value = IsTimeFrameOnCloseTick(timeframe);
+                ListOfClosingTicks[timeframe].Value = ClosingTicks[timeframe].Value;
 
                 // setup price data for each individual timeframe
                 SetPriceData(timeframe);
@@ -1745,171 +1750,6 @@ namespace PowerLanguage.Function
                 if (ListOfClosingTicks[timeframe][0] == true)
                     Closes[timeframe] = Bars.CloseValue;
             }
-        }
-        private bool IsTimeFrameOnCloseTick(int timeframe)
-        {
-            // ------------------------ Timeframe Index Table ------------------------ //
-            // 0 - 5min,   1 - 10min,  2 - 15min, 3 - 20min, 4 - 30min, 5 - 60min,     //
-            // 6 - 120min, 7 - 240min, 8 - day,   9 - week,  10- month                 //
-            //                                                                         //     
-            // ------------------------ Timeframe Index Table ------------------------ //
-
-            bool isCloseTick;
-            int currTimeStartMin = GetCurrentTimeFromSessionOpen();
-            int currTimeStartReg = GetCurrentTime();
-            int sessEndTimeReg = GetSessionEndTime();
-
-            switch (timeframe)
-            {
-                case 0: // 5 min
-                    isCloseTick = (currTimeStartMin % 005) == 0 || (currTimeStartReg == sessEndTimeReg);
-                    break;
-
-                case 1: // 10 min
-                    isCloseTick = (currTimeStartMin % 010) == 0 || (currTimeStartReg == sessEndTimeReg);
-                    break;
-
-                case 2: // 15 min
-                    isCloseTick = (currTimeStartMin % 015) == 0 || (currTimeStartReg == sessEndTimeReg);
-                    break;
-
-                case 3: // 20 min
-                    isCloseTick = (currTimeStartMin % 020) == 0 || (currTimeStartReg == sessEndTimeReg);
-                    break;
-
-                case 4: // 30 min
-                    isCloseTick = (currTimeStartMin % 030) == 0 || (currTimeStartReg == sessEndTimeReg);
-                    break;
-
-                case 5: // 60 min
-                    isCloseTick = (currTimeStartMin % 060) == 0 || (currTimeStartReg == sessEndTimeReg);
-                    break;
-
-                case 6: // 120 min
-                    isCloseTick = (currTimeStartMin % 120) == 0 || (currTimeStartReg == sessEndTimeReg);
-                    break;
-
-                case 7: // 240 min
-                    isCloseTick = (currTimeStartMin % 240) == 0 || (currTimeStartReg == sessEndTimeReg);
-                    break;
-
-                case 8: // daily
-                    isCloseTick = (currTimeStartReg == sessEndTimeReg);
-                    break;
-
-                case 9: // weekly
-                    bool isFx = Bars.Info.Category == ESymbolCategory.Cash;
-                    bool isSessionEnd = currTimeStartReg == sessEndTimeReg;
-                    bool isFriday = Bars.TimeValue.DayOfWeek == DayOfWeek.Friday;
-                    isCloseTick = (isFx && isSessionEnd && isFriday);
-                    break;
-
-                case 10: // monthly
-                    bool isLastDayOfMonth = GetLastTradingDayOfMonth();
-
-                    // last day of the year is tricky ..
-                    if (IsLastDayOfYear() == true && GetCurrentTime() == 1630)
-                        isSessionEnd = true;
-                    else
-                        isSessionEnd = currTimeStartReg == sessEndTimeReg;
-
-                    isFx = Bars.Info.Category == ESymbolCategory.Cash;
-                    isCloseTick = isLastDayOfMonth && isSessionEnd && isFx;
-                    break;
-
-                default:
-                    isCloseTick = false;
-                    break;
-            }
-
-
-            return isCloseTick;
-        }
-        private bool IsLastDayOfYear()
-        {
-            DateTime lastDay = new DateTime(Bars.TimeValue.Year, 12, 31);
-            if (Bars.TimeValue.Date == lastDay.Date) return true;
-
-            return false;
-        }
-        private bool GetLastTradingDayOfMonth()
-        {
-            int year = Bars.TimeValue.Year;
-            int month = Bars.TimeValue.Month;
-            int day = Bars.TimeValue.Day;
-
-            // get the total number of days in this month.
-            int totalDaysInMonth = DateTime.DaysInMonth(year, month);
-
-            // if last day of month is current bar
-            if (Bars.TimeValue.Day == totalDaysInMonth) return true;
-
-            // else check for last trading day
-            DateTime lastDayOfMth = new DateTime(year, month, totalDaysInMonth);
-
-            // if the last day of the month is a weekend
-            if (lastDayOfMth.DayOfWeek == DayOfWeek.Saturday || lastDayOfMth.DayOfWeek == DayOfWeek.Sunday)
-            {
-                // if current day is the last friday of the month.
-                if (day == GetLastFridayOfMonth()) return true;
-            }
-
-            return false;
-        }
-        private int GetLastFridayOfMonth()
-        {
-            int year = Bars.TimeValue.Year;
-            int month = Bars.TimeValue.Month;
-            DateTime lastFriday = new DateTime(year, month, 1).AddMonths(1).AddDays(-1);
-
-            while (lastFriday.DayOfWeek != DayOfWeek.Friday)
-                lastFriday = lastFriday.AddDays(-1);
-
-            return lastFriday.Day;
-        }
-        private int GetSessionEndTime()
-        {
-            // regular, not in total minutes.
-            int hours = Bars.Sessions[0].EndTime.Hours * 100;
-            int minutes = Bars.Sessions[0].EndTime.Minutes;
-            return hours + minutes;
-        }
-        private int GetCurrentTime()
-        {
-            int hours = Bars.TimeValue.Hour * 100;
-            int minutes = Bars.TimeValue.Minute;
-            return hours + minutes;
-        }
-        private int GetCurrentTimeFromSessionOpen()
-        {
-            // minutes from open
-            int minFromSessOpen = 0;
-
-            // total min from Midnight. e.g. 1050 / 60 = 17.5 hours
-            int sessStartMin = (int)Bars.Sessions[0].StartTime.TotalMinutes;
-            int sessEndMin = (int)Bars.Sessions[0].EndTime.TotalMinutes;
-
-            // current time in minutes from midnight
-            int currTimeMin = 60 * Bars.TimeValue.Hour + Bars.TimeValue.Minute;
-
-            // no. of minutes in a day 
-            int totalMinDay = 24 * 60;
-
-            // if no condition applies. Return 0.
-            if (currTimeMin >= sessStartMin && currTimeMin < totalMinDay)
-            {
-                minFromSessOpen = currTimeMin - sessStartMin;
-            }
-            else if (currTimeMin > 0 && currTimeMin <= sessEndMin)
-            {
-                minFromSessOpen = totalMinDay - sessStartMin + currTimeMin;
-            }
-            else if (currTimeMin == 0)
-            {
-                minFromSessOpen = totalMinDay - sessStartMin;
-            }
-
-            return minFromSessOpen;
         }
         private void SetTFsForCalculationBasedOnInterval()
         {
@@ -2038,42 +1878,6 @@ namespace PowerLanguage.Function
             // if none of the above cases, disable all calculations.
             for (int i = 0; i < Timeframes; i++)
                 IsTimeFrameSelected[i] = -1;
-        }
-        private string DisplayTimeFrameSize(int timeframe)
-        {
-            // ------------------------ Timeframe Index Table ------------------------ //
-            // 0 - 5min,   1 - 10min,  2 - 15min, 3 - 20min, 4 - 30min, 5 - 60min,     //
-            // 6 - 120min, 7 - 240min, 8 - day,   9 - week,  10- month                 //
-            //                                                                         //     
-            // ------------------------ Timeframe Index Table ------------------------ //
-
-            switch (timeframe)
-            {
-                case 0:
-                    return "Timeframe: 5 min";
-                case 1:
-                    return "Timeframe: 10 min";
-                case 2:
-                    return "Timeframe: 15 min";
-                case 3:
-                    return "Timeframe: 20 min";
-                case 4:
-                    return "Timeframe: 30 min";
-                case 5:
-                    return "Timeframe: 60 min";
-                case 6:
-                    return "Timeframe: 120 min";
-                case 7:
-                    return "Timeframe: 240 min";
-                case 8:
-                    return "Timeframe: Daily";
-                case 9:
-                    return "Timeframe: Weekly";
-                case 10:
-                    return "Timeframe: Monthly";
-            }
-
-            return "Incorrect timeframe";
         }
 
 

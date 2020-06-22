@@ -131,7 +131,7 @@ namespace PowerLanguage.Indicator
         {
             if (Bars.Status == EBarState.Close)
             {
-                PamaMtf.Call();
+                //PamaMtf.Call();
 
                 PamaPrice[0].Value = PamaMtf.Pama_5.Value;
                 PamaPrice[1].Value = PamaMtf.Pama_10.Value;
