@@ -6,7 +6,7 @@ using PowerLanguage.Function;
 namespace PowerLanguage.Indicator
 {
     //==============================================================================
-    // Name           : __SNi_PamaMTF
+    // Name           : Prepare for disposal
     // Description    : Price Action Moving Average with 10 Timeframes
     // Version        : v.1.0.0
     // Date Created   : 09 - Jun - 2020

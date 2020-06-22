@@ -311,11 +311,11 @@ namespace PowerLanguage.Function
 
     /*  ----------------------------------- Version History -----------------------------------
      *  v.1.0
-     *  
+     *  - 
      *  ----------------------------------- Version History -----------------------------------
 
      *  ---------------------------------------- Notes ----------------------------------------
-     * 
+     *  - Check if function series store the previous calculation info.
      *  ---------------------------------------- Notes ----------------------------------------
      */
 
@@ -1523,10 +1523,12 @@ namespace PowerLanguage.Function
      * Issue of delaying results.
      * Update default settings based on chart resolution size.
      * 
-     * v1.2 does not work. See notes on variable series.
-     * v1.3 adds the calculate all timeframe feature.
+     * v12 does not work. See notes on variable series.
+     * v13 adds the calculate all timeframe feature.
+     * v14 bug fix
+     * v15 Use new MTF closing tick function
      */
-    public sealed class PriceActionMovingAverageMTF : FunctionSeries<bool>
+    public sealed class PriceActionMovingAverageMTF : FunctionSeries<bool> // v15
     {
         // Version 2.0 Update property feature.
 
@@ -1563,6 +1565,577 @@ namespace PowerLanguage.Function
         public ISeries<double> Pama_Month { get { return ListOfPamaValues[10]; } }
 
         public PriceActionMovingAverageMTF(CStudyControl _master) : base(_master) { }
+
+        // class fields
+        private const int Timeframes = 11;
+        private double Alpha, Gain;
+
+        private int[] BarCount, IsTimeFrameSelected;
+        private List<VariableSeries<double>> ListOfPamaValues, ListOfHmaValues;
+        private List<HullMovingAverage> ListOfHmas;
+        private List<VariableSeries<bool>> ListOfClosingTicks;
+        private List<MultiTimeFrameClosingTick> ClosingTicks;
+        private double[] Highs, Lows, Opens, Closes, Prices;
+
+        protected override void Create()
+        {
+            ListOfPamaValues = new List<VariableSeries<double>>();
+            ListOfClosingTicks = new List<VariableSeries<bool>>();
+            ListOfHmas = new List<HullMovingAverage>();
+            ListOfHmaValues = new List<VariableSeries<double>>();
+
+            for (int i = 0; i < Timeframes; i++)
+            {
+                ListOfPamaValues.Add(new VariableSeries<double>(this));
+                ListOfClosingTicks.Add(new VariableSeries<bool>(this));
+                ListOfHmas.Add(new HullMovingAverage(this));
+                ListOfHmaValues.Add(new VariableSeries<double>(this));
+            }
+        }
+        protected override void StartCalc()
+        {
+            Alpha = 2.0 / (_Length + 1.0);
+            Gain = _Smooth / 100.0;
+
+            // reset these data before calculations
+            BarCount = new int[Timeframes];
+            Highs = new double[Timeframes];
+            Lows = new double[Timeframes];
+            Opens = new double[Timeframes];
+            Closes = new double[Timeframes];
+            Prices = new double[Timeframes];
+
+            // Set Hma lengths for each Hma object
+            for (int i = 0; i < Timeframes; i++)
+                ListOfHmas[i]._Length = _Length;
+
+            // disable timeframes according to chart selected.
+            SetTFsForCalculationBasedOnInterval();
+        }
+        protected override bool CalcBar()
+        {
+            // ensure that this function is calculated at closing tick.
+            if (Bars.Status != EBarState.Close) return false;
+
+            // on each bar, iterate through each timeframe.
+            for (int timeframe = 0; timeframe < Timeframes; timeframe++)
+            {
+                // if timeframe is not selected, dont calculate.
+                if (IsTimeFrameSelected[timeframe] != 1) continue;
+
+                // check for each individual timeframe for closing ticks
+                ListOfClosingTicks[timeframe].Value = IsTimeFrameOnCloseTick(timeframe);
+
+                // setup price data for each individual timeframe
+                SetPriceData(timeframe);
+
+                // determine price types to use for price action average calculations
+                SetPriceTypes(timeframe);
+
+                // calculate price action moving average values
+                SetPamaValues(timeframe);
+
+                if (ListOfClosingTicks[timeframe].Value == true)
+                    BarCount[timeframe]++;
+            }
+
+            return false;
+        }
+
+        #region Helper Methods
+        private void SetPamaValues(int timeframe)
+        {
+            // EBarStatus == Close for that timeframe.
+            if (ListOfClosingTicks[timeframe].Value == true)
+            {
+                // pass the data to HMA for calculations
+                ListOfHmas[timeframe]._AddData(Prices[timeframe]);
+
+                // cache the Hma return values into variableseries.
+                ListOfHmaValues[timeframe].Value = ListOfHmas[timeframe].Value;
+
+                // original
+                if (Prices[timeframe] - ListOfPamaValues[timeframe][1] > 0)
+                {
+                    ListOfPamaValues[timeframe].Value
+                    = Alpha * (ListOfHmaValues[timeframe].Value
+                    + (-Gain) * (ListOfHmaValues[timeframe].Value - ListOfPamaValues[timeframe][1]))
+                    + (1.0 - Alpha) * ListOfPamaValues[timeframe][1];
+                }
+                else if (Prices[timeframe] - ListOfPamaValues[timeframe][1] < 0)
+                {
+                    ListOfPamaValues[timeframe].Value
+                   = Alpha * (ListOfHmaValues[timeframe].Value
+                   + Gain * (ListOfHmaValues[timeframe].Value - ListOfPamaValues[timeframe][1]))
+                   + (1.0 - Alpha) * ListOfPamaValues[timeframe][1];
+                }
+                else
+                {
+                    ListOfPamaValues[timeframe].Value
+                   = Alpha * (ListOfHmaValues[timeframe].Value
+                   + 0.0 * (ListOfHmaValues[timeframe].Value - ListOfPamaValues[timeframe][1]))
+                   + (1.0 - Alpha) * ListOfPamaValues[timeframe][1];
+                }
+            }
+        }
+        private void SetPriceTypes(int timeframe)
+        {
+            // -------------------------- Price Input -------------------------- //
+            //          Option 1: Close Price                                    //
+            //          Option 2: Range Price (High - Low)                       //
+            //          Option 3: HLOC Average Price                             //
+            //          Option 4: OC Average Price                               //
+            // ----------------------------------------------------------------- //
+
+
+            // EBarStatus == Close for that timeframe.
+            if (ListOfClosingTicks[timeframe][0] == true)
+            {
+                switch (_PriceType)
+                {
+                    default:
+                    case 1: // using Close Price
+                        Prices[timeframe] = Closes[timeframe];
+                        break;
+
+                    case 2: // use of Range Price
+                        Prices[timeframe]
+                            = Highs[timeframe] - Lows[timeframe];
+                        break;
+
+                    case 3: // Use of HLOC Average Price
+                        Prices[timeframe]
+                            = (Highs[timeframe]
+                            + Lows[timeframe]
+                            + Opens[timeframe]
+                            + Closes[timeframe]) * 0.25;
+                        break;
+
+                    case 4: // Use of OC Average Price
+                        Prices[timeframe]
+                            = (Opens[timeframe]
+                            + Closes[timeframe]) * 0.5;
+                        break;
+                }
+            }
+        }
+        private void SetPriceData(int timeframe)
+        {
+            if (BarCount[timeframe] > 0)
+            {
+                // next regular bar after closing tick for calculated timeframe
+                if (ListOfClosingTicks[timeframe][1] == true)
+                {
+                    Highs[timeframe] = Bars.HighValue;
+                    Lows[timeframe] = Bars.LowValue;
+                    Opens[timeframe] = Bars.OpenValue;
+                }
+                else
+                {
+                    // Keep Track of Higher TFs High Prices
+                    if (Bars.HighValue > Highs[timeframe])
+                        Highs[timeframe] = Bars.High[0];
+
+                    // Keep Track of Higher TFs Low Prices
+                    if (Bars.LowValue < Lows[timeframe])
+                        Lows[timeframe] = Bars.Low[0];
+                }
+
+                // Keep track of closing price.
+                if (ListOfClosingTicks[timeframe][0] == true)
+                    Closes[timeframe] = Bars.CloseValue;
+            }
+        }
+        private bool IsTimeFrameOnCloseTick(int timeframe)
+        {
+            // ------------------------ Timeframe Index Table ------------------------ //
+            // 0 - 5min,   1 - 10min,  2 - 15min, 3 - 20min, 4 - 30min, 5 - 60min,     //
+            // 6 - 120min, 7 - 240min, 8 - day,   9 - week,  10- month                 //
+            //                                                                         //     
+            // ------------------------ Timeframe Index Table ------------------------ //
+
+            bool isCloseTick;
+            int currTimeStartMin = GetCurrentTimeFromSessionOpen();
+            int currTimeStartReg = GetCurrentTime();
+            int sessEndTimeReg = GetSessionEndTime();
+
+            switch (timeframe)
+            {
+                case 0: // 5 min
+                    isCloseTick = (currTimeStartMin % 005) == 0 || (currTimeStartReg == sessEndTimeReg);
+                    break;
+
+                case 1: // 10 min
+                    isCloseTick = (currTimeStartMin % 010) == 0 || (currTimeStartReg == sessEndTimeReg);
+                    break;
+
+                case 2: // 15 min
+                    isCloseTick = (currTimeStartMin % 015) == 0 || (currTimeStartReg == sessEndTimeReg);
+                    break;
+
+                case 3: // 20 min
+                    isCloseTick = (currTimeStartMin % 020) == 0 || (currTimeStartReg == sessEndTimeReg);
+                    break;
+
+                case 4: // 30 min
+                    isCloseTick = (currTimeStartMin % 030) == 0 || (currTimeStartReg == sessEndTimeReg);
+                    break;
+
+                case 5: // 60 min
+                    isCloseTick = (currTimeStartMin % 060) == 0 || (currTimeStartReg == sessEndTimeReg);
+                    break;
+
+                case 6: // 120 min
+                    isCloseTick = (currTimeStartMin % 120) == 0 || (currTimeStartReg == sessEndTimeReg);
+                    break;
+
+                case 7: // 240 min
+                    isCloseTick = (currTimeStartMin % 240) == 0 || (currTimeStartReg == sessEndTimeReg);
+                    break;
+
+                case 8: // daily
+                    isCloseTick = (currTimeStartReg == sessEndTimeReg);
+                    break;
+
+                case 9: // weekly
+                    bool isFx = Bars.Info.Category == ESymbolCategory.Cash;
+                    bool isSessionEnd = currTimeStartReg == sessEndTimeReg;
+                    bool isFriday = Bars.TimeValue.DayOfWeek == DayOfWeek.Friday;
+                    isCloseTick = (isFx && isSessionEnd && isFriday);
+                    break;
+
+                case 10: // monthly
+                    bool isLastDayOfMonth = GetLastTradingDayOfMonth();
+
+                    // last day of the year is tricky ..
+                    if (IsLastDayOfYear() == true && GetCurrentTime() == 1630)
+                        isSessionEnd = true;
+                    else
+                        isSessionEnd = currTimeStartReg == sessEndTimeReg;
+
+                    isFx = Bars.Info.Category == ESymbolCategory.Cash;
+                    isCloseTick = isLastDayOfMonth && isSessionEnd && isFx;
+                    break;
+
+                default:
+                    isCloseTick = false;
+                    break;
+            }
+
+
+            return isCloseTick;
+        }
+        private bool IsLastDayOfYear()
+        {
+            DateTime lastDay = new DateTime(Bars.TimeValue.Year, 12, 31);
+            if (Bars.TimeValue.Date == lastDay.Date) return true;
+
+            return false;
+        }
+        private bool GetLastTradingDayOfMonth()
+        {
+            int year = Bars.TimeValue.Year;
+            int month = Bars.TimeValue.Month;
+            int day = Bars.TimeValue.Day;
+
+            // get the total number of days in this month.
+            int totalDaysInMonth = DateTime.DaysInMonth(year, month);
+
+            // if last day of month is current bar
+            if (Bars.TimeValue.Day == totalDaysInMonth) return true;
+
+            // else check for last trading day
+            DateTime lastDayOfMth = new DateTime(year, month, totalDaysInMonth);
+
+            // if the last day of the month is a weekend
+            if (lastDayOfMth.DayOfWeek == DayOfWeek.Saturday || lastDayOfMth.DayOfWeek == DayOfWeek.Sunday)
+            {
+                // if current day is the last friday of the month.
+                if (day == GetLastFridayOfMonth()) return true;
+            }
+
+            return false;
+        }
+        private int GetLastFridayOfMonth()
+        {
+            int year = Bars.TimeValue.Year;
+            int month = Bars.TimeValue.Month;
+            DateTime lastFriday = new DateTime(year, month, 1).AddMonths(1).AddDays(-1);
+
+            while (lastFriday.DayOfWeek != DayOfWeek.Friday)
+                lastFriday = lastFriday.AddDays(-1);
+
+            return lastFriday.Day;
+        }
+        private int GetSessionEndTime()
+        {
+            // regular, not in total minutes.
+            int hours = Bars.Sessions[0].EndTime.Hours * 100;
+            int minutes = Bars.Sessions[0].EndTime.Minutes;
+            return hours + minutes;
+        }
+        private int GetCurrentTime()
+        {
+            int hours = Bars.TimeValue.Hour * 100;
+            int minutes = Bars.TimeValue.Minute;
+            return hours + minutes;
+        }
+        private int GetCurrentTimeFromSessionOpen()
+        {
+            // minutes from open
+            int minFromSessOpen = 0;
+
+            // total min from Midnight. e.g. 1050 / 60 = 17.5 hours
+            int sessStartMin = (int)Bars.Sessions[0].StartTime.TotalMinutes;
+            int sessEndMin = (int)Bars.Sessions[0].EndTime.TotalMinutes;
+
+            // current time in minutes from midnight
+            int currTimeMin = 60 * Bars.TimeValue.Hour + Bars.TimeValue.Minute;
+
+            // no. of minutes in a day 
+            int totalMinDay = 24 * 60;
+
+            // if no condition applies. Return 0.
+            if (currTimeMin >= sessStartMin && currTimeMin < totalMinDay)
+            {
+                minFromSessOpen = currTimeMin - sessStartMin;
+            }
+            else if (currTimeMin > 0 && currTimeMin <= sessEndMin)
+            {
+                minFromSessOpen = totalMinDay - sessStartMin + currTimeMin;
+            }
+            else if (currTimeMin == 0)
+            {
+                minFromSessOpen = totalMinDay - sessStartMin;
+            }
+
+            return minFromSessOpen;
+        }
+        private void SetTFsForCalculationBasedOnInterval()
+        {
+            // ------------------------ Timeframe Index Table ------------------------ //
+            // 0 - 5min,   1 - 10min,  2 - 15min, 3 - 20min, 4 - 30min, 5 - 60min,     //
+            // 6 - 120min, 7 - 240min, 8 - day,   9 - week,  10- month                 //
+            //                                                                         //     
+            // ------------------------ Timeframe Index Table ------------------------ //
+
+            // clear all previous values.
+            IsTimeFrameSelected = new int[Timeframes];
+
+            // get user input first.
+            IsTimeFrameSelected[0] = Calc_5;
+            IsTimeFrameSelected[1] = Calc_10;
+            IsTimeFrameSelected[2] = Calc_15;
+            IsTimeFrameSelected[3] = Calc_20;
+            IsTimeFrameSelected[4] = Calc_30;
+            IsTimeFrameSelected[5] = Calc_60;
+            IsTimeFrameSelected[6] = Calc_120;
+            IsTimeFrameSelected[7] = Calc_240;
+            IsTimeFrameSelected[8] = Calc_Day;
+            IsTimeFrameSelected[9] = Calc_Week;
+            IsTimeFrameSelected[10] = Calc_Mth;
+
+            // Get bar resolution.
+            int chartTF = (int)Bars.Info.Resolution.Size;
+
+            // one day
+            if (Bars.Info.Resolution.Type == EResolution.Day && chartTF == 1)
+            {
+                // disable all calculations from 0 - 7
+                for (int i = 0; i < 8; i++)
+                    IsTimeFrameSelected[i] = -1;
+
+                return;
+            }
+
+            // one week 
+            else if (Bars.Info.Resolution.Type == EResolution.Week && chartTF == 1)
+            {
+                // disable all calculations from 0 - 8
+                for (int i = 0; i < 9; i++)
+                    IsTimeFrameSelected[i] = -1;
+
+                return;
+            }
+
+            // one month
+            else if (Bars.Info.Resolution.Type == EResolution.Month && chartTF == 1)
+            {
+                // disable all calculations from 0 - 9
+                for (int i = 0; i < 10; i++)
+                    IsTimeFrameSelected[i] = -1;
+
+                return;
+            }
+
+            // min chart
+            else if (Bars.Info.Resolution.Type == EResolution.Minute)
+            {
+                // disable calculations if below a certain timeframe.
+                switch (chartTF)
+                {
+                    case 10:
+                        // disable 5 min
+                        IsTimeFrameSelected[0] = -1;
+                        break;
+
+                    case 15:
+                        // disable 5, 10
+                        IsTimeFrameSelected[0] = -1;
+                        IsTimeFrameSelected[1] = -1;
+                        break;
+
+                    case 20:
+                        // disable 5, 10, 15
+                        IsTimeFrameSelected[0] = -1;
+                        IsTimeFrameSelected[1] = -1;
+                        IsTimeFrameSelected[2] = -1;
+                        break;
+
+                    case 30:
+                        // disable 5, 10, 15, 20
+                        IsTimeFrameSelected[0] = -1;
+                        IsTimeFrameSelected[1] = -1;
+                        IsTimeFrameSelected[2] = -1;
+                        IsTimeFrameSelected[3] = -1;
+                        break;
+
+                    case 60:
+                        // disable 5, 10, 15, 20, 30
+                        IsTimeFrameSelected[0] = -1;
+                        IsTimeFrameSelected[1] = -1;
+                        IsTimeFrameSelected[2] = -1;
+                        IsTimeFrameSelected[3] = -1;
+                        IsTimeFrameSelected[4] = -1;
+                        break;
+
+                    case 120:
+                        // disable 5, 10, 15, 20, 30
+                        IsTimeFrameSelected[0] = -1;
+                        IsTimeFrameSelected[1] = -1;
+                        IsTimeFrameSelected[2] = -1;
+                        IsTimeFrameSelected[3] = -1;
+                        IsTimeFrameSelected[4] = -1;
+                        IsTimeFrameSelected[5] = -1;
+                        break;
+
+                    case 240:
+                        // disable 5, 10, 15, 20, 30
+                        IsTimeFrameSelected[0] = -1;
+                        IsTimeFrameSelected[1] = -1;
+                        IsTimeFrameSelected[2] = -1;
+                        IsTimeFrameSelected[3] = -1;
+                        IsTimeFrameSelected[4] = -1;
+                        IsTimeFrameSelected[5] = -1;
+                        IsTimeFrameSelected[6] = -1;
+                        break;
+                }
+
+                return;
+            }
+
+
+            // if none of the above cases, disable all calculations.
+            for (int i = 0; i < Timeframes; i++)
+                IsTimeFrameSelected[i] = -1;
+        }
+        private string DisplayTimeFrameSize(int timeframe)
+        {
+            // ------------------------ Timeframe Index Table ------------------------ //
+            // 0 - 5min,   1 - 10min,  2 - 15min, 3 - 20min, 4 - 30min, 5 - 60min,     //
+            // 6 - 120min, 7 - 240min, 8 - day,   9 - week,  10- month                 //
+            //                                                                         //     
+            // ------------------------ Timeframe Index Table ------------------------ //
+
+            switch (timeframe)
+            {
+                case 0:
+                    return "Timeframe: 5 min";
+                case 1:
+                    return "Timeframe: 10 min";
+                case 2:
+                    return "Timeframe: 15 min";
+                case 3:
+                    return "Timeframe: 20 min";
+                case 4:
+                    return "Timeframe: 30 min";
+                case 5:
+                    return "Timeframe: 60 min";
+                case 6:
+                    return "Timeframe: 120 min";
+                case 7:
+                    return "Timeframe: 240 min";
+                case 8:
+                    return "Timeframe: Daily";
+                case 9:
+                    return "Timeframe: Weekly";
+                case 10:
+                    return "Timeframe: Monthly";
+            }
+
+            return "Incorrect timeframe";
+        }
+
+
+        #endregion
+
+        #region Print Functions
+        private bool DebugMode = true;
+        private void Print(string message)
+        {
+            // print messages if debug mode == true.
+            if (DebugMode == false) return;
+
+            // Print who is calling Print()
+            StackTrace stackTrace = new StackTrace();
+
+            Output.WriteLine("Project:  {0}   |   Caller:  {1}   |   Bar Time:  {2}   |   Message:  {3}",
+                Name,
+                stackTrace.GetFrame(1).GetMethod().Name,
+                Bars.TimeValue.ToString("dd-MM-yy HH:mm:ss tt"),
+                message);
+        }
+        #endregion
+
+    }
+
+    public sealed class PriceActionMovingAverageMTF_v14 : FunctionSeries<bool> // v14
+    {
+        // Version 2.0 Update property feature.
+
+        // class properties. 
+        public int _Length { get; set; }
+        public int _Smooth { get; set; }
+        public int _PriceType { get; set; }
+        public int _Timeframes { get { return Timeframes; } }
+
+        // display on / off
+        public int Calc_5 { get; set; }
+        public int Calc_10 { get; set; }
+        public int Calc_15 { get; set; }
+        public int Calc_20 { get; set; }
+        public int Calc_30 { get; set; }
+        public int Calc_60 { get; set; }
+        public int Calc_120 { get; set; }
+        public int Calc_240 { get; set; }
+        public int Calc_Day { get; set; }
+        public int Calc_Week { get; set; }
+        public int Calc_Mth { get; set; }
+
+        // Return all 11 Variableseries<double> MTF values.
+        public ISeries<double> Pama_5 { get { return ListOfPamaValues[0]; } }
+        public ISeries<double> Pama_10 { get { return ListOfPamaValues[1]; } }
+        public ISeries<double> Pama_15 { get { return ListOfPamaValues[2]; } }
+        public ISeries<double> Pama_20 { get { return ListOfPamaValues[3]; } }
+        public ISeries<double> Pama_30 { get { return ListOfPamaValues[4]; } }
+        public ISeries<double> Pama_60 { get { return ListOfPamaValues[5]; } }
+        public ISeries<double> Pama_120 { get { return ListOfPamaValues[6]; } }
+        public ISeries<double> Pama_240 { get { return ListOfPamaValues[7]; } }
+        public ISeries<double> Pama_Day { get { return ListOfPamaValues[8]; } }
+        public ISeries<double> Pama_Week { get { return ListOfPamaValues[9]; } }
+        public ISeries<double> Pama_Month { get { return ListOfPamaValues[10]; } }
+
+        public PriceActionMovingAverageMTF_v14 (CStudyControl _master) : base(_master) { }
 
         // class fields
         private const int Timeframes = 11;
