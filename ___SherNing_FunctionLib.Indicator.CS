@@ -323,7 +323,7 @@ namespace PowerLanguage.Function
     {
         // class properties
         public int? _TimeFrame { get; set; }
-        public string TimeFrameSelected
+        public string _TimeFrameSelected
         {
             get
             {
@@ -4763,18 +4763,25 @@ namespace PowerLanguage.Indicator
 
         // class fields
         private DeveloperTools Tools;
+        private MultiTimeFrameClosingTick ClosingTick;
         protected override void Create()
         {
             Output.Clear();
             Tools = new DeveloperTools(this);
+            ClosingTick = new MultiTimeFrameClosingTick(this);
         }
         protected override void StartCalc()
         {
+            ClosingTick._TimeFrame = 5;
+            Print("Timeframe Selected: " + ClosingTick._TimeFrameSelected);
         }
         protected override void CalcBar()
         {
+            if (Bars.CurrentBar < 100)
+            {
+                Print("Closing Tick: " + ClosingTick.Value);
+            }
         }
-
 
         protected override void StopCalc()
         {
