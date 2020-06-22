@@ -1563,7 +1563,14 @@ namespace PowerLanguage.Function
         public ISeries<double> Pama_Week { get { return ListOfPamaValues[9]; } }
         public ISeries<double> Pama_Month { get { return ListOfPamaValues[10]; } }
 
-        public PriceActionMovingAverageMTF(CStudyControl _master) : base(_master) { }
+        public PriceActionMovingAverageMTF(CStudyControl _master) : base(_master) 
+        {
+            // ------------------------ Timeframe Index Table ------------------------ //
+            // 0 - 5min,   1 - 10min,  2 - 15min, 3 - 20min, 4 - 30min, 5 - 60min,     //
+            // 6 - 120min, 7 - 240min, 8 - day,   9 - week,  10- month                 //
+            //                                                                         //     
+            // ------------------------ Timeframe Index Table ------------------------ //
+        }
 
         // class fields
         private const int Timeframes = 11;
@@ -1879,7 +1886,6 @@ namespace PowerLanguage.Function
             for (int i = 0; i < Timeframes; i++)
                 IsTimeFrameSelected[i] = -1;
         }
-
 
         #endregion
 

@@ -133,6 +133,12 @@ namespace PowerLanguage.Indicator
             {
                 PamaMtf.Call();
 
+                // ------------------------ Timeframe Index Table ------------------------ //
+                // 0 - 5min,   1 - 10min,  2 - 15min, 3 - 20min, 4 - 30min, 5 - 60min,     //
+                // 6 - 120min, 7 - 240min, 8 - day,   9 - week,  10- month                 //
+                //                                                                         //     
+                // ------------------------ Timeframe Index Table ------------------------ //
+
                 PamaPrice[0].Value = PamaMtf.Pama_5.Value;
                 PamaPrice[1].Value = PamaMtf.Pama_10.Value;
                 PamaPrice[2].Value = PamaMtf.Pama_15.Value;
@@ -151,21 +157,16 @@ namespace PowerLanguage.Indicator
                     if (PamaPlotSwitch[i] != 1) continue;
 
                     if (PamaPrice[i][1] > 0)
-                    {
                         PamaPlots[i].Set(0, PamaPrice[i][0], Color.Yellow);
-                        Print("Timeframe: " + i);
-                        Print("PamaPrice[0]: " + PamaPrice[i][0]);
-                        Print("PamaPrice[1]: " + PamaPrice[i][1]);
-                    }
                 }
             }
-            
         }
 
         protected override void StopCalc()
         {
             Output.Clear();
         }
+
         #region Print Functions
         private bool DebugMode = true;
         private void Print(string message)
@@ -183,6 +184,5 @@ namespace PowerLanguage.Indicator
                 message);
         }
         #endregion
-
     }
 }
