@@ -25,7 +25,7 @@ using PowerLanguage.Function;
 
 namespace PowerLanguage.Indicator
 {
-    [SameAsSymbol(true)]
+    [SameAsSymbol(true), UpdateOnEveryTick(false)]
     public class __SherNing_PamaMTF : IndicatorObject
     {
         [Input] public int Length { get; set; }
@@ -151,16 +151,13 @@ namespace PowerLanguage.Indicator
                     if (PamaPlotSwitch[i] != 1) continue;
 
                     if (PamaPrice[i][1] > 0)
-                        PamaPlots[i].Set(1, PamaPrice[i][1], Color.Yellow);
+                    {
+                        PamaPlots[i].Set(0, PamaPrice[i][0], Color.Yellow);
+                        Print("Timeframe: " + i);
+                        Print("PamaPrice[0]: " + PamaPrice[i][0]);
+                        Print("PamaPrice[1]: " + PamaPrice[i][1]);
+                    }
                 }
-
-                for (int i = 0; i < Timeframes; i++)
-                {
-                    Print("Timeframe: " + i);
-                    Print("PamaPrice[0]: " + PamaPrice[i][0]);
-                    Print("PamaPrice[1]: " + PamaPrice[i][1]);
-                }
-
             }
             
         }

@@ -1529,7 +1529,7 @@ namespace PowerLanguage.Function
      * v14 bug fix
      * v15 Use new MTF closing tick function
      */
-    public sealed class PriceActionMovingAverageMTF : FunctionSeries<bool> // v15
+    public sealed class PriceActionMovingAverageMTF : FunctionSimple<bool> // v15
     {
         // class properties. 
         public int _Length { get; set; }
@@ -1902,7 +1902,6 @@ namespace PowerLanguage.Function
         #endregion
 
     }
-
     public sealed class PriceActionMovingAverageMTF_v14 : FunctionSeries<bool> // v14
     {
         // Version 2.0 Update property feature.

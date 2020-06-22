@@ -580,15 +580,6 @@ namespace PowerLanguage.Indicator
 
                 for (int i = 0; i < numOfCalcTFs; i++)
                 {
-                    // change to true after test
-                    if (DeBugMode == true)
-                    {
-                        Output.WriteLine("PAC_HighPrices[0]: " + vPvtHighPrices[i][0] + " i = " + i);
-                        Output.WriteLine("PAC_LowPrices[0]: " + vPvtLowPrices[i][0]  + " i = " + i);
-                        Output.WriteLine("PAC_HighPrices[1]: " + vPvtHighPrices1[i][0] + " i = " + i);
-                        Output.WriteLine("PAC_LowPrices[1]: " + vPvtLowPrices1[i][0]  + " i = " + i);
-                    }
-
                     if (vPvtHighPrices[i][0] > vPvtHighPrices1[i][0] && vPvtLowPrices[i][0] > vPvtLowPrices1[i][0])
                     {
                         // both upper and lower sloping upwards. Uptrend
@@ -616,17 +607,6 @@ namespace PowerLanguage.Indicator
 
                     if (DeBugMode == true)
                     {
-                        Output.WriteLine("Market Bias: " + MarketBias[i]);
-
-                        // DONT TRY THIS. IT WILL CRASH YOUR COMPUTER.
-                        //for (int j = 0; j <= 20; j++)
-                        //{
-                        //    if (vPvtHighPrices[i][0] != vPvtHighPrices[i][j])
-                        //    {
-                        //        Output.WriteLine("The last price change for PAC_High value was {0} bars ago", j - 1);
-                        //        break;
-                        //    }
-                        //}
                     }
 
                 }

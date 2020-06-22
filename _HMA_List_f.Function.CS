@@ -122,10 +122,6 @@ namespace PowerLanguage.Function
 
             // - - - - - - - - Set WMA properties - - - - - - - - //
 
-            Output.WriteLine("Length1: {0}", Length1);
-            Output.WriteLine("Length2: {0}", Length2);
-            Output.WriteLine("Length3: {0}", Length3);
-
             onOpenTick = false;
             currentBarPT = 0;
             lastPrice3Idx = 0;
@@ -138,8 +134,6 @@ namespace PowerLanguage.Function
             onOpenTick = (Bars.CurrentBar > currentBarPT);
             currentBarPT = Bars.CurrentBar;
 
-            Output.WriteLine("PriceList1.Count: {0}", PriceList1.Count);
-            Output.WriteLine("PriceList.Count: {0}", PriceList.Count);
             // Note Len2M1 is a bigger of Len1M1 and Len2M1
             if (PriceList.Count > Len2M1)
             {
@@ -148,7 +142,6 @@ namespace PowerLanguage.Function
                 for (int j1 = Len1M1; j1 >= 0 ; j1--)
                 {
                     j2 = j1 + delLen1Len2;
-                    Output.WriteLine("j1, j2: {0} {1}", j1, j2);
                     PriceList1[j1] = PriceList[j2];
                 }
 
