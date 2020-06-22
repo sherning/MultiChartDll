@@ -1522,6 +1522,7 @@ namespace PowerLanguage.Function
     /* ------------------------------- Version History -------------------------------
      * Issue of delaying results.
      * Update default settings based on chart resolution size.
+     * Remember Open-close principle when designing classes
      * 
      * v12 does not work. See notes on variable series.
      * v13 adds the calculate all timeframe feature.
@@ -1628,7 +1629,6 @@ namespace PowerLanguage.Function
                 if (IsTimeFrameSelected[timeframe] != 1) continue;
 
                 // check for each individual timeframe for closing ticks
-                //ListOfClosingTicks[timeframe].Value = IsTimeFrameOnCloseTick(timeframe);
                 ListOfClosingTicks[timeframe].Value = ClosingTicks[timeframe].Value;
 
                 // setup price data for each individual timeframe
