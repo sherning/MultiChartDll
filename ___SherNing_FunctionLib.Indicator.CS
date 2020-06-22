@@ -296,6 +296,43 @@ namespace PowerLanguage.Function
 
     #endregion
 
+    #region Multi Time Frame Closing Ticks
+    //==========================================================================================
+    // Name           : Multi-timeframe Closing Ticks
+    // Description    : Function to determine timeframe selected is closing tick
+    // Version        : v.1.0
+    // Date Created   : 22 - Jun - 2020
+    // Time Taken     : 
+    // Remarks        :
+    //==========================================================================================
+    // Copyright      : 2020, Sher Ning Technologies           
+    // License        :      
+    //==========================================================================================
+
+    /*  ----------------------------------- Version History -----------------------------------
+     *  v.1.0
+     *  
+     *  ----------------------------------- Version History -----------------------------------
+
+     *  ---------------------------------------- Notes ----------------------------------------
+     * 
+     *  ---------------------------------------- Notes ----------------------------------------
+     */
+
+    public sealed class MultiTimeFrameClosingTick : FunctionSeries<bool>
+    {
+        public MultiTimeFrameClosingTick(CStudyControl cStudyControl) : base(cStudyControl)
+        {
+
+        }
+        protected override bool CalcBar()
+        {
+            throw new NotImplementedException();
+        }
+    }
+
+    #endregion
+
     #region Hull Moving Average
     //==============================================================================
     // Name           : Hull Moving Average
