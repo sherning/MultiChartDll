@@ -257,29 +257,32 @@ namespace PowerLanguage.Function
         // Requires adding of data series, data series high, data series low
 
         // class properties
-        public int Length { get; set; }
-        //public double PivotHighValue { get { return GetPivotHighValue(); } }
-        //public double PivotLowValue { get { return GetPivotLowValue(); } }
+        public int _Length { get; set; }
+
+        // get accessors
+        public double PivotHighs { get { return GetPivotHigh(); } }
+        public double PivotLows { get { return GetPivotLow(); } }
 
         // class fields, 3 points required to determine a turning point
         private const int DataPoints = 3;
-        private int Count;
-        private double _PivotHighValue, _PivotLowValue;
+        private double HighestHigh, LowestLow;
         private List<double> ListOfHighs, ListOfLows, DataSet;
 
         // class constructors
-        public MovingAveragePivotsManual (CStudyControl m) : base(m)
-        {
-        }
+        public MovingAveragePivotsManual (CStudyControl m) : base(m) { }
+
         protected override void StartCalc()
         {
             // ensure sufficient length
-            if (Length < 1) Length = 1;
+            if (_Length < 1) _Length = 1;
 
             // instaniate list in startcalc
             DataSet = new List<double>(DataPoints);
-            ListOfHighs = new List<double>(Length);
-            ListOfLows = new List<double>(Length);
+            ListOfHighs = new List<double>(_Length);
+            ListOfLows = new List<double>(_Length);
+
+            // reset class fields
+            HighestHigh = LowestLow = 0;
         }
         protected override double CalcBar()
         {
@@ -302,8 +305,8 @@ namespace PowerLanguage.Function
             ListOfHighs.Insert(0, data);
 
             // remove overflow, last element is length - 1
-            if (ListOfHighs.Count > Length)
-                ListOfHighs.RemoveAt(Length);
+            if (ListOfHighs.Count > _Length)
+                ListOfHighs.RemoveAt(_Length);
         }
         public void AddLow(double data)
         {
@@ -311,13 +314,65 @@ namespace PowerLanguage.Function
             ListOfLows.Insert(0, data);
 
             // remove overflow, last element is length - 1
-            if (ListOfLows.Count > Length)
-                ListOfLows.RemoveAt(Length);
+            if (ListOfLows.Count > _Length)
+                ListOfLows.RemoveAt(_Length);
         }
         #endregion
 
         #region Private Methods
+        private bool IsPivotHigh()
+        {
+            // Peak:  Data[0] < Data[1] > Data[2]  
+            if (DataSet[0] < DataSet[1] && DataSet[1] > DataSet[2]) return true;
 
+            return false;
+        }
+
+        private bool IsPivotLow()
+        {
+            // Trough: Data[0] > Data[1] < Data[2]
+            if (DataSet[0] > DataSet[1] && DataSet[1] < DataSet[2]) return true;
+
+            return false;
+        }
+
+        private double GetPivotHigh()
+        {
+            // if true update highest high value
+            if (IsPivotHigh() == true)
+            {
+                double maxValue = ListOfHighs[0];
+
+                for (int i = 1; i < _Length; i++)
+                {
+                    if (ListOfHighs[i] > maxValue) 
+                        maxValue = Math.Max(maxValue, ListOfHighs[i]);
+                }
+
+                HighestHigh = maxValue;
+            }
+
+            return HighestHigh;
+        }
+
+        private double GetPivotLow()
+        {
+            // if true update lowest low value
+            if (IsPivotLow() == true)
+            {
+                double minValue = ListOfLows[0];
+
+                for (int i = 1; i < _Length; i++)
+                {
+                    if (ListOfLows[i] < minValue)
+                        minValue = Math.Min(minValue, ListOfLows[i]);
+                }
+
+                LowestLow = minValue;
+            }
+
+            return LowestLow;
+        }
         #endregion
 
         #region Print Functions
@@ -338,7 +393,6 @@ namespace PowerLanguage.Function
         }
         #endregion
     }
-
     public sealed class MovingAveragePivot : FunctionSeries<string>
     {
         // class properties
