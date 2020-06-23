@@ -1728,6 +1728,7 @@ namespace PowerLanguage.Function
      * v13 adds the calculate all timeframe feature.
      * v14 bug fix
      * v15 Use new MTF closing tick function
+     * v16 add std dev, add moving average pivots
      */
     public sealed class PriceActionMovingAverageMTF : FunctionSimple<bool> // v15
     {
