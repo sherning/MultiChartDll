@@ -257,12 +257,13 @@ namespace PowerLanguage.Function
         // Requires adding of data series, data series high, data series low
 
         // class properties
+        public int Length { get; set; }
         //public double PivotHighValue { get { return GetPivotHighValue(); } }
         //public double PivotLowValue { get { return GetPivotLowValue(); } }
 
         // class fields, 3 points required to determine a turning point
         private const int DataPoints = 3;
-        private int Length, Count;
+        private int Count;
         private double _PivotHighValue, _PivotLowValue;
         private List<double> ListOfHighs, ListOfLows, DataSet;
 
@@ -270,11 +271,72 @@ namespace PowerLanguage.Function
         public MovingAveragePivotsManual (CStudyControl m) : base(m)
         {
         }
+        protected override void StartCalc()
+        {
+            // ensure sufficient length
+            if (Length < 1) Length = 1;
 
+            // instaniate list in startcalc
+            DataSet = new List<double>(DataPoints);
+            ListOfHighs = new List<double>(Length);
+            ListOfLows = new List<double>(Length);
+        }
         protected override double CalcBar()
         {
-            throw new NotImplementedException();
+            return 0;
         }
+
+        #region Public Methods
+        public void Add(double data)
+        {
+            // front load data
+            DataSet.Insert(0, data);
+
+            // remove overflow
+            if (DataSet.Count > DataPoints)
+                DataSet.RemoveAt(DataPoints);
+        }
+        public void AddHigh(double data)
+        {
+            // front load data
+            ListOfHighs.Insert(0, data);
+
+            // remove overflow, last element is length - 1
+            if (ListOfHighs.Count > Length)
+                ListOfHighs.RemoveAt(Length);
+        }
+        public void AddLow(double data)
+        {
+            // front load data
+            ListOfLows.Insert(0, data);
+
+            // remove overflow, last element is length - 1
+            if (ListOfLows.Count > Length)
+                ListOfLows.RemoveAt(Length);
+        }
+        #endregion
+
+        #region Private Methods
+
+        #endregion
+
+        #region Print Functions
+        private bool DebugMode = true;
+        private void Print(string message)
+        {
+            // print messages if debug mode == true.
+            if (DebugMode == false) return;
+
+            // Print who is calling Print()
+            StackTrace stackTrace = new StackTrace();
+
+            Output.WriteLine("Project:  {0}   |   Caller:  {1}   |   Bar Time:  {2}   |   Message:  {3}",
+                Name,
+                stackTrace.GetFrame(1).GetMethod().Name,
+                Bars.TimeValue.ToString("dd-MM-yy HH:mm:ss tt"),
+                message);
+        }
+        #endregion
     }
 
     public sealed class MovingAveragePivot : FunctionSeries<string>
