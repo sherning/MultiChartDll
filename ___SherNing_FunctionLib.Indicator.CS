@@ -5861,29 +5861,15 @@ namespace PowerLanguage.Indicator
         }
 
         // class fields
-        private TestSeries Test;
-        private List<VariableSeries<double>> ListOfBarValues;
         protected override void Create()
         {
             Output.Clear();
-            Test = new TestSeries(this);
         }
         protected override void StartCalc()
         {
-            ListOfBarValues = Test.GetBarValues;
         }
         protected override void CalcBar()
         {
-            if (Bars.Status == EBarState.Close)
-            {
-                Test.Call();
-
-                //Print("Close: " + ListOfBarValues[0].Value + " " + Bars.CloseValue);
-                //Print("Open: "  + ListOfBarValues[1].Value + " " + Bars.OpenValue);
-                //Print("High: "  + ListOfBarValues[2].Value + " " + Bars.HighValue);
-                //Print("Low: "   + ListOfBarValues[3].Value + " " + Bars.LowValue);
-                //Output.WriteLine("");
-            }
         }
 
         protected override void StopCalc()
