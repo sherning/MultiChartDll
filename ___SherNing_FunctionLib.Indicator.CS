@@ -1818,7 +1818,7 @@ namespace PowerLanguage.Function
         public ISeries<double> Pama_Month { get { return ListOfPamaValues[10]; } }
 
         // return std dev
-        public List<VariableSeries<double>> Pama_Std { get { return ListOfStdDevsValues; } }
+        public List<VariableSeries<double>> Pama_StdDev  { get { return ListOfStdDevsValues; } }
 
         public PriceActionMovingAverageMTF(CStudyControl _master) : base(_master)
         {

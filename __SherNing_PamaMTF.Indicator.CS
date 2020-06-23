@@ -72,11 +72,12 @@ namespace PowerLanguage.Indicator
         private string[] PamaPlotNames;
         private PriceActionMovingAverageMTF PamaMtf;
         private List<VariableSeries<double>> PamaPrice;
-
+        private List<VariableSeries<double>> PamaStdDev;
         protected override void Create()
         {
             PamaMtf = new PriceActionMovingAverageMTF(this);
             PamaPrice = new List<VariableSeries<double>>();
+            PamaStdDev = new List<VariableSeries<double>>();
 
             PamaPlotNames = new string[Timeframes]
             {
@@ -92,6 +93,12 @@ namespace PowerLanguage.Indicator
                 PamaPrice.Add(new VariableSeries<double>(this));
                 PamaPlots.Add(AddPlot(new PlotAttributes(PamaPlotNames[i])));
             }
+
+            for (int i = 1; i <= 4 * Timeframes; i++)
+            {
+                PamaStdDev.Add(new VariableSeries<double>(this));
+            }
+
         }
 
         protected override void StartCalc()
@@ -128,6 +135,7 @@ namespace PowerLanguage.Indicator
             PamaMtf._Smooth = Smooth;
             PamaMtf._PriceType = 1;
 
+            PamaStdDev = PamaMtf.Pama_StdDev;
         }
 
         protected override void CalcBar()
@@ -154,6 +162,10 @@ namespace PowerLanguage.Indicator
                 PamaPrice[9].Value = PamaMtf.Pama_Week.Value;
                 PamaPrice[10].Value = PamaMtf.Pama_Month.Value;
 
+                // set pama values
+                for (int i = 1; i <= 4 * Timeframes; i++)
+                    PamaStdDev[i].Value = PamaMtf.Pama_StdDev[i].Value;
+
                 for (int i = 0; i < Timeframes; i++)
                 {
                     // if not on continue
@@ -161,6 +173,10 @@ namespace PowerLanguage.Indicator
 
                     if (PamaPrice[i][1] > 0)
                         PamaPlots[i].Set(0, PamaPrice[i][0], Color.Yellow);
+
+                    Print("timeframe: " + i);
+                    Print("1st Std Upper: " + PamaStdDev[(i * 4) + 1].Value);
+                    Print("1st Std Lower: " + PamaStdDev[(i * 4) + 2].Value);
                 }
             }
         }
