@@ -1817,6 +1817,9 @@ namespace PowerLanguage.Function
         public ISeries<double> Pama_Week { get { return ListOfPamaValues[9]; } }
         public ISeries<double> Pama_Month { get { return ListOfPamaValues[10]; } }
 
+        // return std dev
+        public List<VariableSeries<double>> Pama_Std { get { return ListOfStdDevsValues; } }
+
         public PriceActionMovingAverageMTF(CStudyControl _master) : base(_master)
         {
             // ------------------------ Timeframe Index Table ------------------------ //
@@ -1984,14 +1987,6 @@ namespace PowerLanguage.Function
 
                 // 2nd std dev lower value
                 ListOfStdDevsValues[(timeframe * 4) + 4].Value = pamaValue - (2 * stdDev);
-
-
-                //Print("Timeframe: " + timeframe);
-                //Print("Pama Value: " + pamaValue);
-                //Print("Std Dev Value: " + stdDev);
-                //Print("1st Std Upper Value: " + ListOfStdDevsValues[(timeframe * 4) + 1].Value);
-                //Print("1st Std Lower Value: " + ListOfStdDevsValues[(timeframe * 4) + 2].Value);
-                //Output.WriteLine("");
             }
         }
         private void SetPamaValues(int timeframe)
