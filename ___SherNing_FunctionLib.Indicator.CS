@@ -1963,6 +1963,11 @@ namespace PowerLanguage.Function
                 // assign data
                 ListOfMaPivotsValues[(timeframe * 2) + 1].Value = pivotHigh;
                 ListOfMaPivotsValues[(timeframe * 2) + 2].Value = pivotLow;
+
+
+                Print("Timeframe: " + timeframe);
+                Print("Pivot High: " + pivotHigh);
+                Print("Pivot Low: " + pivotLow);
             }
         }
         private void SetStdDevValues(int timeframe)

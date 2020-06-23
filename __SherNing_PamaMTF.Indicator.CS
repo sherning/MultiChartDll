@@ -174,9 +174,9 @@ namespace PowerLanguage.Indicator
                     if (PamaPrice[i][1] > 0)
                         PamaPlots[i].Set(0, PamaPrice[i][0], Color.Yellow);
 
-                    Print("timeframe: " + i);
-                    Print("1st Std Upper: " + PamaStdDev[(i * 4) + 1].Value);
-                    Print("1st Std Lower: " + PamaStdDev[(i * 4) + 2].Value);
+                    //Print("timeframe: " + i);
+                    //Print("1st Std Upper: " + PamaStdDev[(i * 4) + 1].Value);
+                    //Print("1st Std Lower: " + PamaStdDev[(i * 4) + 2].Value);
                 }
             }
         }
