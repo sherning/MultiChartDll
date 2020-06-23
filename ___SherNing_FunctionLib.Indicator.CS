@@ -251,6 +251,32 @@ namespace PowerLanguage.Function
      *  ---------------------------------------- Notes ----------------------------------------
      */
 
+    public sealed class MovingAveragePivotsManual : FunctionSeries<double>
+    {
+        // Manual Version :
+        // Requires adding of data series, data series high, data series low
+
+        // class properties
+        //public double PivotHighValue { get { return GetPivotHighValue(); } }
+        //public double PivotLowValue { get { return GetPivotLowValue(); } }
+
+        // class fields, 3 points required to determine a turning point
+        private const int DataPoints = 3;
+        private int Length, Count;
+        private double _PivotHighValue, _PivotLowValue;
+        private List<double> ListOfHighs, ListOfLows, DataSet;
+
+        // class constructors
+        public MovingAveragePivotsManual (CStudyControl m) : base(m)
+        {
+        }
+
+        protected override double CalcBar()
+        {
+            throw new NotImplementedException();
+        }
+    }
+
     public sealed class MovingAveragePivot : FunctionSeries<string>
     {
         // class properties
