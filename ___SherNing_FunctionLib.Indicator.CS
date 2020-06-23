@@ -137,6 +137,97 @@ namespace PowerLanguage.Function
      *  - 
      *  ---------------------------------------- Notes ----------------------------------------
      */
+    public sealed class StandardDeviationCalculatorManual : FunctionSeries<string>
+    {
+        // class properties
+        public int _Length { get; set; }
+        public bool _PopulationStdDev { get; set; }
+
+        // class fields
+        private double[] DataSet;
+        private int Count;
+
+        // class constructor
+        public StandardDeviationCalculatorManual (CStudyControl m) : base(m)
+        {
+
+        }
+        protected override void StartCalc()
+        {
+            // ensure that length is at least 1.
+            if (_Length < 1) _Length = 1;
+
+            // Data set for manual entry
+            DataSet = new double[_Length];
+
+            // reset count
+            Count = 0;
+        }
+        protected override string CalcBar()
+        {
+            return "Use manual methods";
+        }
+
+        public void Add(double data)
+        {
+            // shift all the data back by 1
+            for (int i = _Length - 1; i > 0; i--)
+                DataSet[i] = DataSet[i - 1];
+
+            // Add newest data to the front
+            DataSet[0] = data;
+
+            // Count number of data added.
+            Count++;
+
+            if (Count > _Length) Count--;
+        }
+
+        public double Calculate()
+        {
+            double mean = 0;
+            for (int i = 0; i < _Length; i++)
+                mean += DataSet[i];
+
+            // mean = total sum / length
+            mean /= _Length;
+
+            // calculate variance sigma ^ 2
+            double variance = 0;
+            for (int i = 0; i < _Length; i++)
+                variance += Math.Pow(DataSet[i] - mean, 2);
+
+            Print("Variance: " + variance);
+            Print("Length: " + _Length);
+
+            // calculate population variance
+            if (_PopulationStdDev) variance /= _Length;
+            else variance /= (_Length - 1);
+
+            // std dev = sqrt(variance)
+            Print("Variance: " + Math.Sqrt(variance));
+            return Math.Sqrt(variance);
+        }
+
+        #region Print Functions
+        private bool DebugMode = true;
+        private void Print(string message)
+        {
+            // print messages if debug mode == true.
+            if (DebugMode == false) return;
+
+            // Print who is calling Print()
+            StackTrace stackTrace = new StackTrace();
+
+            Output.WriteLine("Project:  {0}   |   Caller:  {1}   |   Bar Time:  {2}   |   Message:  {3}",
+                Name,
+                stackTrace.GetFrame(1).GetMethod().Name,
+                Bars.TimeValue.ToString("dd-MM-yy HH:mm:ss tt"),
+                message);
+        }
+        #endregion
+
+    }
 
     public sealed class StandardDeviationCalculator : FunctionSeries<double>
     {
@@ -1797,7 +1888,7 @@ namespace PowerLanguage.Function
         private List<HullMovingAverage> ListOfHmas;
         private List<VariableSeries<bool>> ListOfClosingTicks;
         private List<MultiTimeFrameClosingTick> ClosingTicks;
-        private List<StandardDeviationCalculator> ListOfStdDevs;
+        private List<StandardDeviationCalculatorManual> ListOfStdDevs;
         private List<MovingAveragePivotsManual> ListOfMaPivots;
         private List<VariableSeries<double>> ListOfStdDevsValues, ListOfMaPivotsValues;
         private double[] Highs, Lows, Opens, Closes, Prices;
@@ -1813,7 +1904,7 @@ namespace PowerLanguage.Function
 
             // list of custom functions
             ClosingTicks = new List<MultiTimeFrameClosingTick>();
-            ListOfStdDevs = new List<StandardDeviationCalculator>();
+            ListOfStdDevs = new List<StandardDeviationCalculatorManual>();
             ListOfMaPivots = new List<MovingAveragePivotsManual>();
 
             for (int i = 0; i < Timeframes; i++)
@@ -1823,7 +1914,7 @@ namespace PowerLanguage.Function
                 ListOfHmas.Add(new HullMovingAverage(this));
                 ListOfHmaValues.Add(new VariableSeries<double>(this));
                 ClosingTicks.Add(new MultiTimeFrameClosingTick(this));
-                ListOfStdDevs.Add(new StandardDeviationCalculator(this));
+                ListOfStdDevs.Add(new StandardDeviationCalculatorManual(this));
                 ListOfMaPivots.Add(new MovingAveragePivotsManual(this));
             }
 
@@ -1948,12 +2039,12 @@ namespace PowerLanguage.Function
                 ListOfStdDevsValues[(timeframe * 4) + 4].Value = pamaValue - (2 * stdDev);
 
 
-                Print("Timeframe: " + timeframe);
-                Print("Pama Value: " + pamaValue);
-                Print("Std Dev Value: " + stdDev);
-                Print("1st Std Upper Value: " + ListOfStdDevsValues[(timeframe * 4) + 1].Value);
-                Print("1st Std Lower Value: " + ListOfStdDevsValues[(timeframe * 4) + 2].Value);
-                Output.WriteLine("");
+                //Print("Timeframe: " + timeframe);
+                //Print("Pama Value: " + pamaValue);
+                //Print("Std Dev Value: " + stdDev);
+                //Print("1st Std Upper Value: " + ListOfStdDevsValues[(timeframe * 4) + 1].Value);
+                //Print("1st Std Lower Value: " + ListOfStdDevsValues[(timeframe * 4) + 2].Value);
+                //Output.WriteLine("");
             }
         }
         private void SetPamaValues(int timeframe)

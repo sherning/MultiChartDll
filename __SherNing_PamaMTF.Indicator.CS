@@ -29,6 +29,8 @@ namespace PowerLanguage.Indicator
     public class __SherNing_PamaMTF : IndicatorObject
     {
         [Input] public int Length { get; set; }
+        [Input] public int StdDevLength { get; set; }
+        [Input] public int PivotLength { get; set; }
         [Input] public int Smooth { get; set; }
         [Input] public bool CalculateAll { get; set; }
         [Input] public int PlotPama5 { get; set; }
@@ -45,6 +47,9 @@ namespace PowerLanguage.Indicator
         public __SherNing_PamaMTF(object _ctx) : base(_ctx)
         {
             Length = 6;
+            StdDevLength = 6;
+            PivotLength = 4;
+
             Smooth = 10;
             CalculateAll = true;
 
@@ -67,13 +72,11 @@ namespace PowerLanguage.Indicator
         private string[] PamaPlotNames;
         private PriceActionMovingAverageMTF PamaMtf;
         private List<VariableSeries<double>> PamaPrice;
-        private StandardDeviationCalculator StdDevCal;
 
         protected override void Create()
         {
             PamaMtf = new PriceActionMovingAverageMTF(this);
             PamaPrice = new List<VariableSeries<double>>();
-            StdDevCal = new StandardDeviationCalculator(this);
 
             PamaPlotNames = new string[Timeframes]
             {
@@ -119,12 +122,12 @@ namespace PowerLanguage.Indicator
             PamaMtf.Calc_Mth  = PlotPamaMth;
 
             PamaMtf._Length = Length;
+            PamaMtf._StdDevLength = StdDevLength;
+            PamaMtf._PivotLength = PivotLength;
+
             PamaMtf._Smooth = Smooth;
             PamaMtf._PriceType = 1;
 
-            StdDevCal._Length = Length;
-            StdDevCal._PopulationStdDev = true;
-            StdDevCal._Price = PamaMtf.Pama_60;
         }
 
         protected override void CalcBar()
