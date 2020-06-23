@@ -1832,7 +1832,7 @@ namespace PowerLanguage.Function
                 ListOfMaPivotsValues.Add(new VariableSeries<double>(this));
 
             // each std dev has two upper bound and two lower bound value
-            for (int i = 0; i < 4 * Timeframes; i++)
+            for (int i = 0; i <= 4 * Timeframes; i++)
                 ListOfStdDevsValues.Add(new VariableSeries<double>(this));
         }
         protected override void StartCalc()
@@ -1947,7 +1947,13 @@ namespace PowerLanguage.Function
                 // 2nd std dev lower value
                 ListOfStdDevsValues[(timeframe * 4) + 4].Value = pamaValue - (2 * stdDev);
 
-                Print("Std Dev Count: " + ListOfStdDevsValues.Count);
+
+                Print("Timeframe: " + timeframe);
+                Print("Pama Value: " + pamaValue);
+                Print("Std Dev Value: " + stdDev);
+                Print("1st Std Upper Value: " + ListOfStdDevsValues[(timeframe * 4) + 1].Value);
+                Print("1st Std Lower Value: " + ListOfStdDevsValues[(timeframe * 4) + 2].Value);
+                Output.WriteLine("");
             }
         }
         private void SetPamaValues(int timeframe)
