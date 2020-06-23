@@ -165,6 +165,9 @@ namespace PowerLanguage.Function
 
             // reset count
             Count = 0;
+
+            // null reference check
+            if (_Price == null) _Price = Bars.Close;
         }
         protected override double CalcBar()
         {
