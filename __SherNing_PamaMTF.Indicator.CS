@@ -137,7 +137,7 @@ namespace PowerLanguage.Indicator
             PamaMtf._Smooth = Smooth;
             PamaMtf._PriceType = 1;
 
-            // reference assignment ?
+            // reference assignment - ok
             PamaStdDev = PamaMtf.Pama_StdDev;
             PamaPivots = PamaMtf.Pama_Pivots;
         }
@@ -165,15 +165,7 @@ namespace PowerLanguage.Indicator
                 PamaPrice[8].Value = PamaMtf.Pama_Day.Value;
                 PamaPrice[9].Value = PamaMtf.Pama_Week.Value;
                 PamaPrice[10].Value = PamaMtf.Pama_Month.Value;
-
-                // set pama values
-                for (int i = 1; i <= 4 * Timeframes; i++)
-                    PamaStdDev[i].Value = PamaMtf.Pama_StdDev[i].Value;
-
-                // set pivot values
-                for (int i = 1; i <= 2 * Timeframes ; i++)
-                    PamaPivots[i].Value = PamaMtf.Pama_Pivots[i].Value;
-
+               
                 for (int i = 0; i < Timeframes; i++)
                 {
                     // if not on continue
@@ -182,11 +174,11 @@ namespace PowerLanguage.Indicator
                     if (PamaPrice[i][1] > 0)
                         PamaPlots[i].Set(0, PamaPrice[i][0], Color.Yellow);
 
-                    Print("timeframe: " + i);
+                    //Print("timeframe: " + i);
                     //Print("1st Std Upper: " + PamaStdDev[(i * 4) + 1].Value);
                     //Print("1st Std Lower: " + PamaStdDev[(i * 4) + 2].Value);
-                    Print("Pivots Upper: " + PamaPivots[(i * 2) + 1].Value);
-                    Print("Pivots Lower: " + PamaPivots[(i * 2) + 2].Value);
+                    //Print("Pivots Upper: " + PamaPivots[(i * 2) + 1].Value);
+                    //Print("Pivots Lower: " + PamaPivots[(i * 2) + 2].Value);
                 }
             }
         }

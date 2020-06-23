@@ -2246,7 +2246,6 @@ namespace PowerLanguage.Function
         #endregion
 
     }
-
     public sealed class PriceActionMovingAverageMTFv15 : FunctionSimple<bool> // v15
     {
         // class properties. 
@@ -5750,7 +5749,7 @@ namespace PowerLanguage.Function
     public sealed class TestSeries : FunctionSeries<double>
     {
         // class properties
-
+        public List<VariableSeries<double>> GetBarValues { get { return ListOfBarValues; } }
         // class fields
 
         // MC does this implicitly for you.
@@ -5764,14 +5763,25 @@ namespace PowerLanguage.Function
         public TestSeries(CStudyControl _master, int _ds) : base(_master, _ds) { }
 
         // class members
+        private List<VariableSeries<double>> ListOfBarValues;
         protected override void Create()
         {
+            ListOfBarValues = new List<VariableSeries<double>>();
+            for (int i = 0; i < 4; i++)
+                ListOfBarValues.Add(new VariableSeries<double>(this));
         }
         protected override void StartCalc()
         {
         }
         protected override double CalcBar()
         {
+            if (Bars.Status == EBarState.Close)
+            {
+                ListOfBarValues[0].Value = Bars.CloseValue;
+                ListOfBarValues[1].Value = Bars.OpenValue;
+                ListOfBarValues[2].Value = Bars.HighValue;
+                ListOfBarValues[3].Value = Bars.LowValue;
+            }
             return 0;
         }
 
@@ -5796,26 +5806,15 @@ namespace PowerLanguage.Function
     public sealed class TestSimple : FunctionSimple<int>
     {
         public int Length { get; set; }
-        public ISeries<double> Price { get; set; }
-        public VariableSeries<double> GetAvgValues { get; private set; }
         public TestSimple(CStudyControl _master) : base(_master) { }
         public TestSimple(CStudyControl _master, int _ds) : base(_master, _ds) { }
 
-        //private VariableSeries<double> AvgValues;
-
         protected override void Create()
         {
-            GetAvgValues = new VariableSeries<double>(this);
         }
         protected override int CalcBar()
         {
-            double sum = 0;
-            for (int i = 0; i < Length; i++)
-                sum += Price[i];
-
-            GetAvgValues.Value = sum / Length;
-
-            return 1;
+            return 0;
         }
     }
     #endregion
@@ -5862,16 +5861,29 @@ namespace PowerLanguage.Indicator
         }
 
         // class fields
-        private DeveloperTools Tools;
+        private TestSeries Test;
+        private List<VariableSeries<double>> ListOfBarValues;
         protected override void Create()
         {
             Output.Clear();
+            Test = new TestSeries(this);
         }
         protected override void StartCalc()
         {
+            ListOfBarValues = Test.GetBarValues;
         }
         protected override void CalcBar()
         {
+            if (Bars.Status == EBarState.Close)
+            {
+                Test.Call();
+
+                //Print("Close: " + ListOfBarValues[0].Value + " " + Bars.CloseValue);
+                //Print("Open: "  + ListOfBarValues[1].Value + " " + Bars.OpenValue);
+                //Print("High: "  + ListOfBarValues[2].Value + " " + Bars.HighValue);
+                //Print("Low: "   + ListOfBarValues[3].Value + " " + Bars.LowValue);
+                //Output.WriteLine("");
+            }
         }
 
         protected override void StopCalc()
