@@ -1890,6 +1890,7 @@ namespace PowerLanguage.Function
                 SetStdDevValues(timeframe);
 
                 // set MA pivot values
+                SetMovingAveragePivots(timeframe);
 
                 if (ListOfClosingTicks[timeframe].Value == true)
                     BarCount[timeframe]++;
@@ -1906,10 +1907,18 @@ namespace PowerLanguage.Function
                 // cache pama value
                 double pamaValue = ListOfPamaValues[timeframe].Value;
 
+                // add data
                 ListOfMaPivots[timeframe].Add(pamaValue);
                 ListOfMaPivots[timeframe].AddHigh(Highs[timeframe]);
                 ListOfMaPivots[timeframe].AddLow(Lows[timeframe]);
 
+                // cache data
+                double pivotHigh = ListOfMaPivots[timeframe].PivotHighs;
+                double pivotLow = ListOfMaPivots[timeframe].PivotLows;
+
+                // assign data
+                ListOfMaPivotsValues[(timeframe * 2) + 1].Value = pivotHigh;
+                ListOfMaPivotsValues[(timeframe * 2) + 2].Value = pivotLow;
             }
         }
         private void SetStdDevValues(int timeframe)
@@ -1934,6 +1943,8 @@ namespace PowerLanguage.Function
 
                 // 2nd std dev lower value
                 ListOfStdDevsValues[(timeframe * 4) + 4].Value = pamaValue - (2 * stdDev);
+
+                Print("Std Dev Count: " + ListOfStdDevsValues.Count);
             }
         }
         private void SetPamaValues(int timeframe)
