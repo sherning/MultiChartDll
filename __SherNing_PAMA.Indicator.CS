@@ -1200,8 +1200,8 @@ namespace PowerLanguage.Indicator
 
                 if (IsShowPivot == true)
                 {
-                    ListOfUpperPivotPlots[i].Set(1, ListOfPivotHighValues[i][0], plotColor);
-                    ListOfLowerPivotPlots[i].Set(1, ListOfPivotLowValues[i][0], plotColor);
+                    ListOfUpperPivotPlots[i].Set(1, ListOfPivotHighValues[i][1], plotColor);
+                    ListOfLowerPivotPlots[i].Set(1, ListOfPivotLowValues[i][1], plotColor);
                 }
             }
         }

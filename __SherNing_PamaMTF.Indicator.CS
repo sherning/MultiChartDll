@@ -73,11 +73,13 @@ namespace PowerLanguage.Indicator
         private PriceActionMovingAverageMTF PamaMtf;
         private List<VariableSeries<double>> PamaPrice;
         private List<VariableSeries<double>> PamaStdDev;
+        private List<VariableSeries<double>> PamaPivots;
         protected override void Create()
         {
             PamaMtf = new PriceActionMovingAverageMTF(this);
             PamaPrice = new List<VariableSeries<double>>();
             PamaStdDev = new List<VariableSeries<double>>();
+            PamaPivots = new List<VariableSeries<double>>();
 
             PamaPlotNames = new string[Timeframes]
             {
@@ -94,11 +96,11 @@ namespace PowerLanguage.Indicator
                 PamaPlots.Add(AddPlot(new PlotAttributes(PamaPlotNames[i])));
             }
 
-            for (int i = 1; i <= 4 * Timeframes; i++)
-            {
-                PamaStdDev.Add(new VariableSeries<double>(this));
-            }
+            for (int i = 1; i <= 2 * Timeframes ; i++)
+                PamaPivots.Add(new VariableSeries<double>(this));
 
+            for (int i = 1; i <= 4 * Timeframes; i++)
+                PamaStdDev.Add(new VariableSeries<double>(this));
         }
 
         protected override void StartCalc()
@@ -135,7 +137,9 @@ namespace PowerLanguage.Indicator
             PamaMtf._Smooth = Smooth;
             PamaMtf._PriceType = 1;
 
+            // reference assignment ?
             PamaStdDev = PamaMtf.Pama_StdDev;
+            PamaPivots = PamaMtf.Pama_Pivots;
         }
 
         protected override void CalcBar()
@@ -166,6 +170,10 @@ namespace PowerLanguage.Indicator
                 for (int i = 1; i <= 4 * Timeframes; i++)
                     PamaStdDev[i].Value = PamaMtf.Pama_StdDev[i].Value;
 
+                // set pivot values
+                for (int i = 1; i <= 2 * Timeframes ; i++)
+                    PamaPivots[i].Value = PamaMtf.Pama_Pivots[i].Value;
+
                 for (int i = 0; i < Timeframes; i++)
                 {
                     // if not on continue
@@ -174,9 +182,11 @@ namespace PowerLanguage.Indicator
                     if (PamaPrice[i][1] > 0)
                         PamaPlots[i].Set(0, PamaPrice[i][0], Color.Yellow);
 
-                    //Print("timeframe: " + i);
+                    Print("timeframe: " + i);
                     //Print("1st Std Upper: " + PamaStdDev[(i * 4) + 1].Value);
                     //Print("1st Std Lower: " + PamaStdDev[(i * 4) + 2].Value);
+                    Print("Pivots Upper: " + PamaPivots[(i * 2) + 1].Value);
+                    Print("Pivots Lower: " + PamaPivots[(i * 2) + 2].Value);
                 }
             }
         }

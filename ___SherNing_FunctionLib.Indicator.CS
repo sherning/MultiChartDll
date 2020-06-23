@@ -1820,6 +1820,9 @@ namespace PowerLanguage.Function
         // return std dev
         public List<VariableSeries<double>> Pama_StdDev  { get { return ListOfStdDevsValues; } }
 
+        // return pama pivots
+        public List<VariableSeries<double>> Pama_Pivots { get { return ListOfMaPivotsValues; } }
+
         public PriceActionMovingAverageMTF(CStudyControl _master) : base(_master)
         {
             // ------------------------ Timeframe Index Table ------------------------ //
@@ -1868,8 +1871,9 @@ namespace PowerLanguage.Function
                 ListOfMaPivots.Add(new MovingAveragePivotsManual(this));
             }
 
+            // Create one extra plot
             // for each MA pivot there is an upper bound and lower bound value
-            for (int i = 1; i <= 2 * Timeframes; i++)
+            for (int i = 0; i <= 2 * Timeframes; i++)
                 ListOfMaPivotsValues.Add(new VariableSeries<double>(this));
 
             // each std dev has two upper bound and two lower bound value
@@ -1963,11 +1967,6 @@ namespace PowerLanguage.Function
                 // assign data
                 ListOfMaPivotsValues[(timeframe * 2) + 1].Value = pivotHigh;
                 ListOfMaPivotsValues[(timeframe * 2) + 2].Value = pivotLow;
-
-
-                Print("Timeframe: " + timeframe);
-                Print("Pivot High: " + pivotHigh);
-                Print("Pivot Low: " + pivotLow);
             }
         }
         private void SetStdDevValues(int timeframe)
