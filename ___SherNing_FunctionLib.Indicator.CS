@@ -197,15 +197,11 @@ namespace PowerLanguage.Function
             for (int i = 0; i < _Length; i++)
                 variance += Math.Pow(DataSet[i] - mean, 2);
 
-            Print("Variance: " + variance);
-            Print("Length: " + _Length);
-
             // calculate population variance
             if (_PopulationStdDev) variance /= _Length;
             else variance /= (_Length - 1);
 
             // std dev = sqrt(variance)
-            Print("Variance: " + Math.Sqrt(variance));
             return Math.Sqrt(variance);
         }
 
@@ -228,18 +224,12 @@ namespace PowerLanguage.Function
         #endregion
 
     }
-
     public sealed class StandardDeviationCalculator : FunctionSeries<double>
     {
         // class properties
         public int _Length { get; set; }
         public bool _PopulationStdDev { get; set; }
         public ISeries<double> _Price { get; set; }
-
-
-        // class fields
-        private double[] DataSet;
-        private int Count;
 
         // class constructor
         public StandardDeviationCalculator(CStudyControl m) : base(m)
@@ -250,12 +240,6 @@ namespace PowerLanguage.Function
         {
             // ensure that length is at least 1.
             if (_Length < 1) _Length = 1;
-
-            // Data set for manual entry
-            DataSet = new double[_Length];
-
-            // reset count
-            Count = 0;
 
             // null reference check
             if (_Price == null) _Price = Bars.Close;
@@ -273,43 +257,6 @@ namespace PowerLanguage.Function
             double variance = 0;
             for (int i = 0; i < _Length; i++)
                 variance += Math.Pow(_Price[i] - mean, 2);
-
-            // calculate population variance
-            if (_PopulationStdDev) variance /= _Length;
-            else variance /= (_Length - 1);
-
-            // std dev = sqrt(variance)
-            return Math.Sqrt(variance);
-        }
-
-        public void Add(double data)
-        {
-            // shift all the data back by 1
-            for (int i = _Length - 1; i > 0; i--)
-                DataSet[i] = DataSet[i - 1];
-
-            // Add newest data to the front
-            DataSet[0] = data;
-
-            // Count number of data added.
-            Count++;
-
-            if (Count > _Length) Count--;
-        }
-
-        public double Calculate()
-        {
-            double mean = 0;
-            for (int i = 0; i < _Length; i++)
-                mean += DataSet[i];
-
-            // mean = total sum / length
-            mean /= _Length;
-
-            // calculate variance sigma ^ 2
-            double variance = 0;
-            for (int i = 0; i < _Length; i++)
-                variance += Math.Pow(DataSet[i] - mean, 2);
 
             // calculate population variance
             if (_PopulationStdDev) variance /= _Length;
