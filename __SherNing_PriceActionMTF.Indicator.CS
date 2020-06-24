@@ -27,7 +27,28 @@ using PowerLanguage.Function;
 
 namespace PowerLanguage.Indicator
 {
-    [SameAsSymbol(true)]
+    //==========================================================================================
+    // Name           : Price Action Moving Average Multi Time frame
+    // Description    : Run simple tests
+    // Version        : v.1.0
+    // Date Created   : 10 - Jun - 2020
+    // Time Taken     : 
+    // Remarks        :
+    //==========================================================================================
+    // Copyright      : 2020, Sher Ning Technologies           
+    // License        :      
+    //==========================================================================================
+
+    /*  ----------------------------------- Version History -----------------------------------
+     *   v.1.0
+     *  ----------------------------------- Version History -----------------------------------
+
+     *  ---------------------------------------- Notes ----------------------------------------
+     *   - 
+     *  ---------------------------------------- Notes ----------------------------------------
+     */
+
+    [SameAsSymbol(true), UpdateOnEveryTick(false)]
     public class __SherNing_PriceActionMTF : IndicatorObject
     {
         [Input] public int PriceTypeInput { get; set; }
@@ -1190,7 +1211,7 @@ namespace PowerLanguage.Indicator
                 else if (ListOfColorValues[i].Value == RedColor)
                     plotColor = Color.Red;
 
-                ListOfPamaPlots[i].Set(1, ListOfPamaValues[i][1], plotColor);
+                ListOfPamaPlots[i].Set(0, ListOfPamaValues[i][0], plotColor);
 
                 if (IsShowStdDev == true)
                 {
