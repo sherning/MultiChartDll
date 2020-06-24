@@ -159,7 +159,6 @@ namespace PowerLanguage.Strategy
 
             // status: ok
         }
-
         protected override void CalcBar()
         {
             // Calculate only on last bar of chart
