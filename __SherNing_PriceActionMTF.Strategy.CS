@@ -37,8 +37,15 @@ namespace PowerLanguage.Strategy
         public __SherNing_PriceActionMTF(object _ctx) : base(_ctx) 
         {
         }
+
+        private IOrderMarket BuyOrder;
+        private IOrderMarket SellOrder;
         protected override void Create()
         {
+            BuyOrder = OrderCreator.MarketNextBar(new SOrderParameters(Contracts.UserSpecified,
+               EOrderAction.Buy));
+            SellOrder = OrderCreator.MarketNextBar(new SOrderParameters(Contracts.Default,
+                EOrderAction.Sell,OrderExit.FromAll));
         }
 
         protected override void StartCalc()
@@ -46,8 +53,17 @@ namespace PowerLanguage.Strategy
         }
         protected override void CalcBar()
         {
+            if (Bars.CurrentBar == 5 || Bars.CurrentBar == 15 || Bars.CurrentBar == 25 || Bars.CurrentBar == 35 )
+            {
+                BuyOrder.Send(100000);
+            }
 
+            if (Bars.LastBarOnChart)
+            {
+                SellOrder.Send();
+            }
         }
+       
 
         #region Print Functions
         private bool DebugMode = true;

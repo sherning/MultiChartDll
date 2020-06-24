@@ -1101,7 +1101,7 @@ namespace PowerLanguage.Indicator
         private List<IPlotObject> ListOfPamaPlots;
         private List<IPlotObject> ListOfFirstStdDevUpper, ListOfFirstStdDevLower;
         private List<IPlotObject> ListOfUpperPivotPlots, ListOfLowerPivotPlots;
-        private string[] PamaPlotNames;
+        private string[] PamaPlotNames, PamaStdDevPlotName, PamaPivotPlotNames;
         private int[] PamaPlotStyle;
         private int[] PamaPlotWidth;
         private void PAMAPlots_Create()
@@ -1112,6 +1112,19 @@ namespace PowerLanguage.Indicator
                 "60 Min","120 Min","240 Min",
                 "Daily", "Weekly","Monthly"
             };
+
+            PamaStdDevPlotName = new string[NumTFs * 2];
+            PamaPivotPlotNames = new string[NumTFs * 2];
+
+            // reuse plot names, using string concat
+            for (int i = 0; i < NumTFs; i++)
+            {
+                PamaStdDevPlotName[(i * 2)] = "Std Dev Upper: " + PamaPlotNames[i];
+                PamaStdDevPlotName[(i * 2) + 1] = "Std Dev Lower: " + PamaPlotNames[i];
+                PamaPivotPlotNames[(i * 2)] = "Pivot Upper: " + PamaPlotNames[i];
+                PamaPivotPlotNames[(i * 2) + 1] = "Pivot Lower: " + PamaPlotNames[i];
+                PamaPlotNames[i] = "Pama: " + PamaPlotNames[i];
+            }
 
             PamaPlotWidth = new int[NumTFs]
             {
@@ -1157,7 +1170,7 @@ namespace PowerLanguage.Indicator
 
                 ListOfFirstStdDevUpper.Add(
                      AddPlot(new PlotAttributes(
-                        PamaPlotNames[i],
+                        PamaStdDevPlotName[i * 2],
                         EPlotShapes.Line,
                         Color.White, // default colors
                         Color.White, // default colors
@@ -1167,7 +1180,7 @@ namespace PowerLanguage.Indicator
 
                 ListOfFirstStdDevLower.Add(
                      AddPlot(new PlotAttributes(
-                        PamaPlotNames[i],
+                        PamaStdDevPlotName[(i * 2) + 1],
                         EPlotShapes.Line,
                         Color.White, // default colors
                         Color.White, // default colors
@@ -1177,7 +1190,7 @@ namespace PowerLanguage.Indicator
 
                 ListOfUpperPivotPlots.Add(
                      AddPlot(new PlotAttributes(
-                        PamaPlotNames[i],
+                        PamaPivotPlotNames[i * 2],
                         EPlotShapes.Line,
                         Color.White, // default colors
                         Color.White, // default colors
@@ -1187,7 +1200,7 @@ namespace PowerLanguage.Indicator
 
                 ListOfLowerPivotPlots.Add(
                      AddPlot(new PlotAttributes(
-                        PamaPlotNames[i],
+                        PamaPivotPlotNames[(i * 2) + 1],
                         EPlotShapes.Line,
                         Color.White, // default colors
                         Color.White, // default colors
@@ -1296,9 +1309,6 @@ namespace PowerLanguage.Indicator
         private int CurrentTimeFrame;
         private void PAMA_StartCalc()
         {
-            // Clear output messages
-            Output.Clear();
-
             // Pama variables
             Alpha = 2.0 / (Length + 1.0);
             Gain = Smoothness / 100.0;
