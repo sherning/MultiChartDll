@@ -77,6 +77,7 @@
     <Compile Include="__SherNing_BarDemographics.Indicator.CS" />
     <Compile Include="__SherNing_PamaMTF.Indicator.CS" />
     <Compile Include="__SherNing_StrategyBackTester.Strategy.CS" />
+    <Compile Include="__SherNing_StrategyToBroker.Strategy.CS" />
     <Compile Include="__SherNing_TradeManagerTest.Strategy.CS" />
     <Compile Include="___SherNing_FunctionLib.Indicator.CS" />
   </ItemGroup>
