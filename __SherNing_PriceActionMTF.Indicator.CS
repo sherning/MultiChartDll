@@ -1218,10 +1218,10 @@ namespace PowerLanguage.Indicator
             {
                 if (PAMA_TF_Switch[i] != 1) continue;
 
-                if (ListOfColorValues[i].Value == GreenColor)
+                if (ListOfColorValues[i][0] == GreenColor)
                     plotColor = Color.LimeGreen;
 
-                else if (ListOfColorValues[i].Value == RedColor)
+                else if (ListOfColorValues[i][0] == RedColor)
                     plotColor = Color.Red;
 
                 ListOfPamaPlots[i].Set(0, ListOfPamaValues[i][0], plotColor);
