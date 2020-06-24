@@ -23,10 +23,22 @@ using ATCenterProxy.interop;
 
 namespace PowerLanguage.Strategy
 {
-    // [IOGMode(IOGMode.Enabled)]
-    [IOGMode(IOGMode.Disabled)]
+    public class _SN_Sign_EverestStudy : SignalObject
+    {
 
-    public class _Everest_205 : SignalObject
+        public _SN_Sign_EverestStudy(object m) : base(m)
+        {
+
+        }
+
+        protected override void CalcBar()
+        {
+            throw new NotImplementedException();
+        }
+    }
+
+    #region Everest Legacy Code
+    public class _Everest_205v10 : SignalObject
     {
         #region inputs
 
@@ -168,7 +180,7 @@ namespace PowerLanguage.Strategy
                 public Color PosMisMatchColor { get; set; }
         */
 
-        public _Everest_205(object _ctx) : base(_ctx)
+        public _Everest_205v10 (object _ctx) : base(_ctx)
         {
 
             ToolBarInputs = "ToolBar Inputs";
@@ -2922,6 +2934,8 @@ namespace PowerLanguage.Strategy
         #endregion strategySpecificFunctions
 
     }
+
+    #endregion
 
     #region HP_CurrentSession_f
     //---------------------------------------------------------------------

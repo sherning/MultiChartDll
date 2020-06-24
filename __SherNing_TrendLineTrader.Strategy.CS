@@ -42,7 +42,7 @@ namespace PowerLanguage.Strategy
     [IOGMode(IOGMode.Enabled), RecoverDrawings(false), MouseEvents(true)]
     [AllowSendOrdersAlways(true)]
     [ExitFromOneEntryOnce(ExitFromOneEntryOnce.FillAndKillExitOrder)]
-    public class __SNs_TrendLineTrader : SignalObject
+    public class __SherNing_TrendLineTrader : SignalObject
     {
         // class inputs
         [Input] public string TrendLineTraderSettings { get; set; }
@@ -67,7 +67,7 @@ namespace PowerLanguage.Strategy
         private VariableSeries<int> MarketPosition;
         private DeveloperTools Tools;
         private AutoPositionSizingFX AutoPos;
-        public __SNs_TrendLineTrader(object _ctx) : base(_ctx)
+        public __SherNing_TrendLineTrader (object _ctx) : base(_ctx)
         {
             // header
             TrendLineTraderSettings = "Trend Line Trader Settings Menu";
@@ -2140,7 +2140,7 @@ namespace PowerLanguage.Strategy
                     BtnArrangeLines.ForeColor = Color.White;
                     TogLines = false;
                 }
-               
+
             };
             #endregion
 

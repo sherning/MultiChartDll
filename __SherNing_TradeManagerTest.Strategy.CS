@@ -33,9 +33,9 @@ namespace PowerLanguage.Strategy
      * 
      *  ---------------------------------------- Notes ----------------------------------------
      */
-    public class __SNs_TradeManagerTest : SignalObject
+    public class __SherNing_TradeManagerTest : SignalObject
     {
-        public __SNs_TradeManagerTest (object _ctx) : base(_ctx) { }
+        public __SherNing_TradeManagerTest (object _ctx) : base(_ctx) { }
         protected override void Create()
         {
         }

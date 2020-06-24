@@ -28,11 +28,11 @@ using PowerLanguage.Function;
 namespace PowerLanguage.Indicator
 {
     [SameAsSymbol(true)]
-    public class __SherNing_PAMA : IndicatorObject
+    public class __SherNing_PriceActionMTF : IndicatorObject
     {
         [Input] public int PriceTypeInput { get; set; }
         [Input] public int DataTypeInput { get; set; }
-        public __SherNing_PAMA(object _ctx) : base(_ctx)
+        public __SherNing_PriceActionMTF(object _ctx) : base(_ctx)
         {
             PriceTypeInput = 1;
             // -------------------------- Price Input -------------------------- //

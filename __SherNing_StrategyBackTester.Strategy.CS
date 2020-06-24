@@ -70,7 +70,7 @@ namespace PowerLanguage.Strategy
 
     [MouseEvents(true), IOGMode(IOGMode.Enabled)]
     [ExitFromOneEntryOnce(ExitFromOneEntryOnce.FillAndKillExitOrder)]
-    public class __SNs_StrategyTester : SignalObject // v2.1
+    public class __SherNing_StrategyBackTester : SignalObject // v2.1
     {
         // strategy inputs
         [Input] public string StrategyTester_Settings { get; set; }
@@ -91,7 +91,7 @@ namespace PowerLanguage.Strategy
         private VariableSeries<int> MarketPosition;
         private const int NumOfOrderTypes = 6;
 
-        public __SNs_StrategyTester(object _ctx) : base(_ctx)
+        public __SherNing_StrategyBackTester (object _ctx) : base(_ctx)
         {
             StrategyTester_Settings = "--Strategy Tester Settings Menu--";
 
@@ -249,7 +249,7 @@ namespace PowerLanguage.Strategy
 
             // marketposition
             MarketPosition.Value = StrategyInfo.MarketPosition;
-          
+
             // iterate the list
             foreach (BarInfo bar in ListOfOrderBars)
             {
@@ -606,7 +606,7 @@ namespace PowerLanguage.Strategy
                 ExecControl.RecalcLastBarAfter(TimeSpan.FromMilliseconds(100));
             };
 
-           
+
         }
 
         protected override void OnRecalcLastBarAfterEvent()
