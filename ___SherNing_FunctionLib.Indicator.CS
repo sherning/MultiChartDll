@@ -5380,7 +5380,13 @@ namespace PowerLanguage.Function
             return "Developer Tools";
         }
 
-        #region Get Eastern Standard Time
+        #region International Time Zone
+        public DateTime GetLondonTime()
+        {
+            DateTime currTime = DateTime.Now;
+            TimeZoneInfo britishZone = TimeZoneInfo.FindSystemTimeZoneById("GMT Standard Time");
+            return TimeZoneInfo.ConvertTime(currTime, TimeZoneInfo.Local, britishZone);
+        }
         public DateTime GetEasternTime()
         {
             DateTime timeUtc = DateTime.UtcNow;

@@ -29,7 +29,7 @@ using System.Windows.Forms;
 
 namespace PowerLanguage.Indicator
 {
-    [SameAsSymbol(true), MouseEvents(true)]
+    [SameAsSymbol(true), MouseEvents(true), UpdateOnEveryTick(true), SkipIdenticalTicks(true)]
     public class __SherNing_TestIndicator : IndicatorObject
     {
         [Input] public int Length { get; set; }
@@ -38,28 +38,67 @@ namespace PowerLanguage.Indicator
             Length = 6;
         }
         private IPlotObject Plot10, Plot11, Plot12;
+        private IPlotObjectStr StatusLine;
+        private DeveloperTools Tools;
         protected override void Create()
         {
             Plot10 = AddPlot(new PlotAttributes("v10"));
             Plot11 = AddPlot(new PlotAttributes("v11"));
             Plot12 = AddPlot(new PlotAttributes("v12"));
+
+            StatusLine = AddPlot(new StringPlotAttributes("Clock", Color.LimeGreen, Color.White));
+            Tools = new DeveloperTools(this);
         }
 
         protected override void StartCalc()
         {
-          
         }
 
         protected override void CalcBar()
         {
-           
+            if (Bars.LastBarOnChart != true) return;
+
+            DateTime prevTime = Bars.StatusLine.Time;
+            DateTime easternTime = Tools.GetEasternTime();
+            TimeSpan timeDiff = easternTime - prevTime;
+
+            string statusTxt = string.Format("{0} ({1}s)",
+                prevTime.ToString("HH:mm:ss"),
+                Math.Round(timeDiff.TotalSeconds,
+                1));
+
+
+            if (timeDiff > TimeSpan.FromSeconds(30))
+            {
+                StatusLine.Set(statusTxt, Color.Red);
+            }
+            else if (timeDiff > TimeSpan.FromSeconds(15))
+            {
+                StatusLine.Set(statusTxt, Color.Orange);
+            }
+            else
+            {
+                StatusLine.Set(statusTxt, Color.LimeGreen);
+            }
+
+            ExecControl.RecalcLastBarAfter(TimeSpan.FromSeconds(1));
+        }
+
+        protected override void OnRecalcLastBarAfterEvent()
+        {
+            DateTime easternTime = Tools.GetEasternTime();
+
+            if (easternTime.DayOfWeek != DayOfWeek.Saturday && easternTime.DayOfWeek != DayOfWeek.Sunday)
+            {
+                CalcBar();
+            }
         }
 
         protected override void StopCalc()
         {
-        
+
         }
-      
+
 
         #region Print Functions
         private bool DebugMode = true;
