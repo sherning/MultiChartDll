@@ -5380,6 +5380,15 @@ namespace PowerLanguage.Function
             return "Developer Tools";
         }
 
+        #region Get Eastern Standard Time
+        public DateTime GetEasternTime()
+        {
+            DateTime timeUtc = DateTime.UtcNow;
+            TimeZoneInfo easternZone = TimeZoneInfo.FindSystemTimeZoneById("Eastern Standard Time");
+            return TimeZoneInfo.ConvertTimeFromUtc(timeUtc, easternZone);
+        }
+        #endregion
+
         #region Closing Tick for Different TimeFrames
 
         public int ChartResolutionSize()
