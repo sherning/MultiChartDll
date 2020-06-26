@@ -94,7 +94,6 @@ namespace PowerLanguage.Strategy
                 Counter = 0;
             }
         }
-       
 
         #region Print Functions
         private bool DebugMode = true;
@@ -113,6 +112,5 @@ namespace PowerLanguage.Strategy
                 message);
         }
         #endregion
-
     }
 }
