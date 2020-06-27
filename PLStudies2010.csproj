@@ -80,6 +80,7 @@
     <Compile Include="__SherNing_StrategyToBroker.Strategy.CS" />
     <Compile Include="__SherNing_TradeManagerTest.Strategy.CS" />
     <Compile Include="___SherNing_FunctionLib.Indicator.CS" />
+    <Compile Include="__SherNing_Linq.Indicator.CS" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>
