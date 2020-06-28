@@ -5,6 +5,8 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Linq;
 using PowerLanguage.Function;
+using ATCenterProxy.interop;
+using System.Threading;
 
 namespace PowerLanguage.Indicator
 {
@@ -42,31 +44,106 @@ namespace PowerLanguage.Indicator
         protected override void StartCalc()
         {
             Output.Clear();
-            TradeList<int> tradeList = new TradeList<int>();
-            tradeList.Add(1);
-            tradeList.Add(1);
-            tradeList.Add(2);
-            tradeList.Add(3);
-            tradeList.Add(4);
-            tradeList.Add(15);
-            tradeList.Add(16);
-            tradeList.Add(17);
-
-            foreach (var item in tradeList)
-            {
-                Print("Item: " + item);
-            }
-
-            foreach (var item in TestYield())
-            {
-                Print("Item: " + item);
-            }
         }
         protected override void CalcBar()
         {
+            if (Bars.LastBarOnChart)
+            {
+                Print("Close: " + GetSymbolLiveQuote("EUR.USD", ESymbolCategory.Cash));
+            }
         }
 
-        private IEnumerable<int> TestYield()
+        private Dictionary<string, double> LastSymbolPrices;
+        private DateTime LastSessionTime;
+        private double GetSymbolLiveQuote(string symbolName, ESymbolCategory category)
+        {
+            ReaderWriterLockSlim rwLock = new ReaderWriterLockSlim();
+
+            double forexData = 0;
+
+            var benchmarkInfo = SymbolStorage
+                .GetDataFeeds()
+                .SelectMany
+                (
+                    data => SymbolStorage.GetSymbols(data, category)
+                                         .Select(data2 => new { dataFeed = data, symInfo = data2 })
+                )
+                .Where(data => data.symInfo.SymbolName == symbolName)
+                .First();
+
+            InstrumentDataRequest request = Bars.Request;
+            request.Range.From = Bars.Time[2];
+            request.Range.To = Bars.Time[0];
+            request.Category = (ESymbolCategory)benchmarkInfo.symInfo.SymbolCategory;
+            request.Symbol = benchmarkInfo.symInfo.SymbolName;
+            request.DataFeed = benchmarkInfo.dataFeed;
+            request.Exchange = benchmarkInfo.symInfo.SymbolExchange;
+            request.RTSymbol = request.Symbol;
+            request.RTDataFeed = request.DataFeed;
+            request.RTExchange = request.Exchange;
+
+            AutoResetEvent autoEvent = new AutoResetEvent(false);
+
+            IDataLoaderResult results = DataLoader.BeginLoadData(request, result =>
+            {
+                if (result.IsCompleted)
+                {
+                    try
+                    {
+                        rwLock.EnterWriteLock();
+                        foreach (var quote in result.Data)
+                        {
+                            forexData = quote.Close;
+                        }
+                    }
+                    finally
+                    {
+                        rwLock.ExitWriteLock();
+                    }
+                }
+
+                DataLoader.EndLoadData(result);
+                autoEvent.Set();
+            }
+            , null);
+
+            autoEvent.WaitOne();
+            return forexData;
+        }
+
+
+        #region Linq Tests
+        private void LinkTest()
+        {
+            // get symbols last closing prices and store them in a dictionary
+            IEnumerable<string> brokers = SymbolStorage
+               .GetDataFeeds()
+               .OrderByDescending(broker => broker);
+
+            // this is an anonymous type, must use var
+            var symbols = SymbolStorage
+                .GetSymbols("Interactive Brokers", ESymbolCategory.Cash)
+                .SelectMy(symbol => new { Name = symbol.SymbolName, Exchange = symbol.SymbolExchange });
+
+
+            foreach (var item in symbols)
+            {
+                Print("Name: " + item.Name);
+                Print("Exchange: " + item.Exchange);
+            }
+
+            // old school
+            IEnumerator<string> rator = brokers.GetEnumerator();
+            while (rator.MoveNext())
+            {
+                Print("Broker: " + rator.Current);
+            }
+
+            // what are the information that I will need to pull data
+            InstrumentDataRequest request = Bars.Request;
+
+        }
+        private IEnumerable<int> YieldReturnTest()
         {
             // you can return multiple numbers with yield return
             yield return 1;
@@ -76,6 +153,7 @@ namespace PowerLanguage.Indicator
             yield return 3;
             yield return 4;
         }
+        #endregion
 
         #region Print Functions
         private bool DebugMode = true;
@@ -94,6 +172,27 @@ namespace PowerLanguage.Indicator
                 message);
         }
         #endregion
+    }
+
+    static class MyLinq
+    { 
+        // yield return is causing the deferred execution
+        public static IEnumerable<T> WhereMy<T> (this IEnumerable<T> query, Func<T,bool> gauntlet)
+        {
+            foreach (T item in query)
+            {
+                if (gauntlet(item) == true)
+                    yield return item;
+            }
+        }
+
+        public static IEnumerable<Ret> SelectMy<Source, Ret> 
+            (this IEnumerable<Source> query, Func<Source, Ret> transform)
+        {
+            // takes in one type and spits out another or the same type
+            foreach (var item in query)
+                yield return transform(item);
+        }
     }
 
     class TradeList<T>
