@@ -1682,6 +1682,9 @@ namespace PowerLanguage.Function
             /*   Context on Threading
              *   The concept of foreground and background thread. 
              *   As BeginLoadData is called on a separate worker/foreground thread
+             *   Foreground thread will continue to run, even though the background thread has ended.
+             *   To terminate worker thread when main (background) thread has ended, you will need
+             *   to set the worker thread property IsBackground = true
              *   You will need the AutoResetEvent class to wait for the results,
              *   before returning the forexData local variable. Otherwise, 
              *   the return statement will be called before the Dataload results.
