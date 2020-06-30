@@ -44,19 +44,80 @@ namespace PowerLanguage.Indicator
         protected override void StartCalc()
         {
             Output.Clear();
+            ExecInfo.MaxBarsBack = 1;
         }
         protected override void CalcBar()
         {
             if (Bars.LastBarOnChart)
             {
                 Print("Close: " + GetSymbolLiveQuote("EUR.USD", ESymbolCategory.Cash));
+                GetSymbolLiveQuote_test("EUR.USD", ESymbolCategory.Cash);
+                Print("Close test: " + ForexData);
             }
         }
 
         private Dictionary<string, double> LastSymbolPrices;
         private DateTime LastSessionTime;
+        private double ForexData;
+        private double GetSymbolLiveQuote_test(string symbolName, ESymbolCategory category)
+        {
+            ReaderWriterLockSlim rwLock = new ReaderWriterLockSlim();
+
+            double forexData = 0;
+            var benchmarkInfo = SymbolStorage
+                .GetDataFeeds()
+                .SelectMany
+                (
+                    data => SymbolStorage.GetSymbols(data, category)
+                                         .Select(data2 => new { dataFeed = data, symInfo = data2 })
+                )
+                .Where(data => data.symInfo.SymbolName == symbolName)
+                .First();
+
+            InstrumentDataRequest request = Bars.Request;
+            request.Range.From = Bars.Time[0];
+            request.Range.To = Bars.Time[0];
+            request.Category = (ESymbolCategory)benchmarkInfo.symInfo.SymbolCategory;
+            request.Symbol = benchmarkInfo.symInfo.SymbolName;
+            request.DataFeed = benchmarkInfo.dataFeed;
+            request.Exchange = benchmarkInfo.symInfo.SymbolExchange;
+            request.RTSymbol = request.Symbol;
+            request.RTDataFeed = request.DataFeed;
+            request.RTExchange = request.Exchange;
+
+            AutoResetEvent autoEvent = new AutoResetEvent(false);
+
+            // this is running on a separate thread.
+            DataLoader.BeginLoadData(request, result =>
+            {
+                if(result.IsCompleted)
+                {
+                    lock (result)
+                    {
+                        foreach (var quote in result.Data)
+                        {
+                            Output.WriteLine("Quote: " + quote.Close);
+                            forexData = quote.Close;
+                            ForexData = quote.Close;
+                        }
+
+                        DataLoader.EndLoadData(result);
+                    }
+
+                    autoEvent.Set();
+                }
+            }
+            , null);
+
+            // wait for data loader to finish its task first before returning value.
+            autoEvent.WaitOne();
+            Print("Forex Data: " + forexData);
+            return forexData;
+        }
+
         private double GetSymbolLiveQuote(string symbolName, ESymbolCategory category)
         {
+            // when working on different treads, you will need to lock.
             ReaderWriterLockSlim rwLock = new ReaderWriterLockSlim();
 
             double forexData = 0;
@@ -72,7 +133,7 @@ namespace PowerLanguage.Indicator
                 .First();
 
             InstrumentDataRequest request = Bars.Request;
-            request.Range.From = Bars.Time[2];
+            request.Range.From = Bars.Time[0];
             request.Range.To = Bars.Time[0];
             request.Category = (ESymbolCategory)benchmarkInfo.symInfo.SymbolCategory;
             request.Symbol = benchmarkInfo.symInfo.SymbolName;
@@ -82,10 +143,15 @@ namespace PowerLanguage.Indicator
             request.RTDataFeed = request.DataFeed;
             request.RTExchange = request.Exchange;
 
+            // for each set of waitone, you need to have a set to release the thread, or it will be in limbo
+            // if you use manual reset, one set to release ALL waitone. Does not matter for this example below
             AutoResetEvent autoEvent = new AutoResetEvent(false);
 
+            // dataloader returns IDataLoader class, which takes a struct and delegate
             IDataLoaderResult results = DataLoader.BeginLoadData(request, result =>
             {
+                // load data call back is simply a pointer to a method, 
+                // in this case, this anonymous method here, which process data from thread
                 if (result.IsCompleted)
                 {
                     try
@@ -103,10 +169,13 @@ namespace PowerLanguage.Indicator
                 }
 
                 DataLoader.EndLoadData(result);
+
+                // signal new thread to start again
                 autoEvent.Set();
             }
             , null);
 
+            // wait here for autoevent to signal to start again
             autoEvent.WaitOne();
             return forexData;
         }
@@ -175,9 +244,9 @@ namespace PowerLanguage.Indicator
     }
 
     static class MyLinq
-    { 
+    {
         // yield return is causing the deferred execution
-        public static IEnumerable<T> WhereMy<T> (this IEnumerable<T> query, Func<T,bool> gauntlet)
+        public static IEnumerable<T> WhereMy<T>(this IEnumerable<T> query, Func<T, bool> gauntlet)
         {
             foreach (T item in query)
             {
@@ -186,7 +255,7 @@ namespace PowerLanguage.Indicator
             }
         }
 
-        public static IEnumerable<Ret> SelectMy<Source, Ret> 
+        public static IEnumerable<Ret> SelectMy<Source, Ret>
             (this IEnumerable<Source> query, Func<Source, Ret> transform)
         {
             // takes in one type and spits out another or the same type
