@@ -1699,6 +1699,12 @@ namespace PowerLanguage.Function
              *   
              *   Once the results returns completed. There is where we lock.
              *   Note: Autoevent needs BOTH a wait and set as a pair, otherwise, it will be in limbo.
+             *   
+             *   Another note is callback: Callback is a delegate with a specific signature from MC.NET
+             *   It takes in a delegate or method pointer to be executed when inside dataloader. 
+             *   Call back is just a fancy name, in reality, it is just a delegate.
+             *   As we are dealing with parallel programming, we need to execute our method inside of 
+             *   DataLoader, otherwise, we would not know if the operation has completed, or call prematurely
              */
             ReaderWriterLockSlim rwLock = new ReaderWriterLockSlim();
 
