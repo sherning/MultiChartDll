@@ -1679,6 +1679,27 @@ namespace PowerLanguage.Function
         }
         private double GetSymbolLiveQuote(string symbolName, ESymbolCategory category)
         {
+            /*   Context on Threading
+             *   The concept of foreground and background thread. 
+             *   As BeginLoadData is called on a separate worker/foreground thread
+             *   You will need the AutoResetEvent class to wait for the results,
+             *   before returning the forexData local variable. Otherwise, 
+             *   the return statement will be called before the Dataload results.
+             *   Resulting in forexData = 0.
+             *   
+             *   This is different from concurrency. This is multi-threading or
+             *   parallelism programming. Concurrency, utilizes async and await to 
+             *   prevent blocking or freezing of user interface. For parallelism,
+             *   it is best used for single-heavy task operations, which does not involve
+             *   frequent passing of data from one thread to another.
+             *   
+             *   The lock in this case, ReaderWriterLockSlim, is used for synchronization.
+             *   In the event that, another application is using the same function. 
+             *   It prevents both applications from entering the same function call at the same time.
+             *   
+             *   Once the results returns completed. There is where we lock.
+             *   Note: Autoevent needs BOTH a wait and set as a pair, otherwise, it will be in limbo.
+             */
             ReaderWriterLockSlim rwLock = new ReaderWriterLockSlim();
 
             double forexData = 0;
@@ -1704,31 +1725,37 @@ namespace PowerLanguage.Function
             request.RTDataFeed = request.DataFeed;
             request.RTExchange = request.Exchange;
 
+            // without autoEvent, the method will return before results are returned
             AutoResetEvent autoEvent = new AutoResetEvent(false);
 
+            // this is foreground or worker thread.
             IDataLoaderResult results = DataLoader.BeginLoadData(request, result =>
             {
+                // check to see if load data is completed
                 if (result.IsCompleted)
                 {
                     try
                     {
+                        // lock to prevent other application from accessing concurrently
                         rwLock.EnterWriteLock();
                         foreach (var quote in result.Data)
-                        {
                             forexData = quote.Close;
-                        }
                     }
                     finally
                     {
+                        // remember to unlock
                         rwLock.ExitWriteLock();
                     }
                 }
 
                 DataLoader.EndLoadData(result);
+
+                // return control to main thread
                 autoEvent.Set();
             }
             , null);
 
+            // wait for signal from worker thread to continue
             autoEvent.WaitOne();
             return forexData;
         }
