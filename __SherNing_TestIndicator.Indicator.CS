@@ -34,38 +34,23 @@ namespace PowerLanguage.Indicator
         [Input] public int Length { get; set; }
         public __SherNing_TestIndicator(object _ctx) : base(_ctx)
         {
-            Output.Clear();
-            Output.WriteLine("Indicator Constructor");
-            Length = 6;
         }
-        private IndicatorTestFunction Test;
 
         protected override void Create()
         {
-            Output.WriteLine("Indicator Create()");
-            Test = new IndicatorTestFunction(this);
         }
 
         protected override void StartCalc()
         {
-            Output.WriteLine("Indicator StartCalc()");
-            //Test.Length = Length;
         }
 
         protected override void CalcBar()
         {
-            Test.Call();
-            if (Bars.CurrentBar == 1)
-                Output.WriteLine("Indicator Bar: 1");
-
-            if (Bars.LastBarOnChart)
-                Output.WriteLine("Indicator Bar: Last");
+           
         }
 
         protected override void StopCalc()
         {
-            Output.WriteLine("Indicator StopCalc()");
-
         }
 
         #region Print Functions
@@ -89,44 +74,3 @@ namespace PowerLanguage.Indicator
 
 }
 
-namespace PowerLanguage.Function
-{
-    public sealed class IndicatorTestFunction : FunctionSimple<int>
-    {
-        public int Length { get; set; }
-        public IndicatorTestFunction(CStudyControl m):base(m)
-        {
-            Output.WriteLine("Function Constructor");
-        }
-
-        protected override void Create()
-        {
-            Output.WriteLine("Function Create()");
-        }
-
-        protected override void StartCalc()
-        {
-            Output.WriteLine("Function StartCalc()");
-        }
-
-        protected override int CalcBar()
-        {
-            for (int i = 1; i < 10; i++)
-            {
-                if (Bars.CurrentBar == i)
-                    Output.WriteLine("Function BarNum: " + i);
-            }
-
-            if(Bars.LastBarOnChart)
-                Output.WriteLine("Function Bar: Last");
-
-            return 0;
-        }
-
-        protected override void StopCalc()
-        {
-            Output.WriteLine("Function StopCalc()");
-        }
-    }
-
-}

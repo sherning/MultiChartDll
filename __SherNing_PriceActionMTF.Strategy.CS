@@ -76,9 +76,6 @@ namespace PowerLanguage.Strategy
 
             if (Bars.LastBarOnChart)
             {
-                Print("Pama1: " + Pama1.Value);
-                Print("Pama2: " + Pama2.Value);
-                Print("Pama3: " + Pama3.Value);
             }
         }
 
