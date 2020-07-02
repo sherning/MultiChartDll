@@ -30,7 +30,7 @@ namespace PowerLanguage.Strategy
      *  - 3 timeframes
      *  - Highest Timeframe determines market direction
      *  - Decide which timeframe to trade.
-     *  
+     *  - Strategy call create -> function call create -> in sync
      *  
      *  ---------------------------------------- Notes ----------------------------------------
      */
