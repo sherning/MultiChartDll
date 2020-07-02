@@ -22,6 +22,7 @@ namespace PowerLanguage.Strategy
 
     /*  ----------------------------------- Version History -----------------------------------
      *  v10
+     *  - By default, strategy calculates on closing tick, unless IOG = enabled.
      *  ----------------------------------- Version History -----------------------------------
      
 
@@ -35,21 +36,50 @@ namespace PowerLanguage.Strategy
      */
     public class __SherNing_PriceActionMTF : SignalObject //v10
     {
+        [Input] public int Length { get; set; }
+        [Input] public int Smooth { get; set; }
 
         public __SherNing_PriceActionMTF(object _ctx) : base(_ctx) 
         {
+            Length = 6;
+            Smooth = 10;
         }
 
-       
+        private PriceActionMovingAverageStrategyFunction PamaFunction;
+        private VariableSeries<double> Pama1, Pama2, Pama3;
+
         protected override void Create()
         {
+            PamaFunction = new PriceActionMovingAverageStrategyFunction(this);
+            Pama1 = new VariableSeries<double>(this);
+            Pama2 = new VariableSeries<double>(this);
+            Pama3 = new VariableSeries<double>(this);
         }
 
         protected override void StartCalc()
         {
+            // for standard test only need Length and Smooth
+            PamaFunction._Length = Length;
+            PamaFunction._PivotLength = 4;
+            PamaFunction._PriceType = 1;
+            PamaFunction._Smooth = Smooth;
+            PamaFunction._StdDevLength = 6;
+
+            // point strategy to function reference
+            Pama1 = PamaFunction._Pama_1;
+            Pama2 = PamaFunction._Pama_2;
+            Pama3 = PamaFunction._Pama_3;
         }
         protected override void CalcBar()
         {
+            PamaFunction.Call();
+
+            if (Bars.LastBarOnChart)
+            {
+                Print("Pama1: " + Pama1.Value);
+                Print("Pama2: " + Pama2.Value);
+                Print("Pama3: " + Pama3.Value);
+            }
         }
 
         #region Print Functions
@@ -92,7 +122,7 @@ namespace PowerLanguage.Function
      
 
      *  ---------------------------------------- Notes ----------------------------------------
-     *  - trade on either 5 min or 60 min
+     *  - function works on ONLY 5 min, 15 min, 60 min
      *  ---------------------------------------- Notes ----------------------------------------
      */
     public sealed class PriceActionMovingAverageStrategyFunction : FunctionSimple<bool>
@@ -105,7 +135,10 @@ namespace PowerLanguage.Function
         public int _PriceType { get; set; }
         public int _Timeframes { get { return Timeframes; } }
 
-        
+        // return values
+        public VariableSeries<double> _Pama_1 { get { return Pama1; }  }
+        public VariableSeries<double> _Pama_2 { get { return Pama2; }  }
+        public VariableSeries<double> _Pama_3 { get { return Pama3; }  }
 
         // return std dev
         public List<VariableSeries<double>> Pama_StdDev { get { return ListOfStdDevsValues; } }
@@ -127,6 +160,7 @@ namespace PowerLanguage.Function
         private double Alpha, Gain;
 
         private int[] BarCount, IsTimeFrameSelected;
+        private VariableSeries<double> Pama1, Pama2, Pama3;
         private List<VariableSeries<double>> ListOfPamaValues, ListOfHmaValues;
         private List<HullMovingAverage> ListOfHmas;
         private List<VariableSeries<bool>> ListOfClosingTicks;
@@ -138,6 +172,11 @@ namespace PowerLanguage.Function
 
         protected override void Create()
         {
+            // return pama values
+            Pama1 = new VariableSeries<double>(this);
+            Pama2 = new VariableSeries<double>(this);
+            Pama3 = new VariableSeries<double>(this);
+
             ListOfPamaValues = new List<VariableSeries<double>>();
             ListOfClosingTicks = new List<VariableSeries<bool>>();
             ListOfHmas = new List<HullMovingAverage>();
@@ -397,122 +436,55 @@ namespace PowerLanguage.Function
             // clear all previous values.
             IsTimeFrameSelected = new int[Timeframes];
 
-            // get user input first.
-            IsTimeFrameSelected[0] = Calc_5;
-            IsTimeFrameSelected[1] = Calc_10;
-            IsTimeFrameSelected[2] = Calc_15;
-            IsTimeFrameSelected[3] = Calc_20;
-            IsTimeFrameSelected[4] = Calc_30;
-            IsTimeFrameSelected[5] = Calc_60;
-            IsTimeFrameSelected[6] = Calc_120;
-            IsTimeFrameSelected[7] = Calc_240;
-            IsTimeFrameSelected[8] = Calc_Day;
-            IsTimeFrameSelected[9] = Calc_Week;
-            IsTimeFrameSelected[10] = Calc_Mth;
-
             // Get bar resolution.
             int chartTF = (int)Bars.Info.Resolution.Size;
 
-            // one day
-            if (Bars.Info.Resolution.Type == EResolution.Day && chartTF == 1)
-            {
-                // disable all calculations from 0 - 7
-                for (int i = 0; i < 8; i++)
-                    IsTimeFrameSelected[i] = -1;
-
-                return;
-            }
-
-            // one week 
-            else if (Bars.Info.Resolution.Type == EResolution.Week && chartTF == 1)
-            {
-                // disable all calculations from 0 - 8
-                for (int i = 0; i < 9; i++)
-                    IsTimeFrameSelected[i] = -1;
-
-                return;
-            }
-
-            // one month
-            else if (Bars.Info.Resolution.Type == EResolution.Month && chartTF == 1)
-            {
-                // disable all calculations from 0 - 9
-                for (int i = 0; i < 10; i++)
-                    IsTimeFrameSelected[i] = -1;
-
-                return;
-            }
-
-            // min chart
-            else if (Bars.Info.Resolution.Type == EResolution.Minute)
-            {
-                // disable calculations if below a certain timeframe.
-                switch (chartTF)
-                {
-                    case 10:
-                        // disable 5 min
-                        IsTimeFrameSelected[0] = -1;
-                        break;
-
-                    case 15:
-                        // disable 5, 10
-                        IsTimeFrameSelected[0] = -1;
-                        IsTimeFrameSelected[1] = -1;
-                        break;
-
-                    case 20:
-                        // disable 5, 10, 15
-                        IsTimeFrameSelected[0] = -1;
-                        IsTimeFrameSelected[1] = -1;
-                        IsTimeFrameSelected[2] = -1;
-                        break;
-
-                    case 30:
-                        // disable 5, 10, 15, 20
-                        IsTimeFrameSelected[0] = -1;
-                        IsTimeFrameSelected[1] = -1;
-                        IsTimeFrameSelected[2] = -1;
-                        IsTimeFrameSelected[3] = -1;
-                        break;
-
-                    case 60:
-                        // disable 5, 10, 15, 20, 30
-                        IsTimeFrameSelected[0] = -1;
-                        IsTimeFrameSelected[1] = -1;
-                        IsTimeFrameSelected[2] = -1;
-                        IsTimeFrameSelected[3] = -1;
-                        IsTimeFrameSelected[4] = -1;
-                        break;
-
-                    case 120:
-                        // disable 5, 10, 15, 20, 30
-                        IsTimeFrameSelected[0] = -1;
-                        IsTimeFrameSelected[1] = -1;
-                        IsTimeFrameSelected[2] = -1;
-                        IsTimeFrameSelected[3] = -1;
-                        IsTimeFrameSelected[4] = -1;
-                        IsTimeFrameSelected[5] = -1;
-                        break;
-
-                    case 240:
-                        // disable 5, 10, 15, 20, 30
-                        IsTimeFrameSelected[0] = -1;
-                        IsTimeFrameSelected[1] = -1;
-                        IsTimeFrameSelected[2] = -1;
-                        IsTimeFrameSelected[3] = -1;
-                        IsTimeFrameSelected[4] = -1;
-                        IsTimeFrameSelected[5] = -1;
-                        IsTimeFrameSelected[6] = -1;
-                        break;
-                }
-
-                return;
-            }
-
-
-            // if none of the above cases, disable all calculations.
+            // set by default to disable calculation
             for (int i = 0; i < Timeframes; i++)
                 IsTimeFrameSelected[i] = -1;
+
+            // set and assign function return values
+            if (chartTF == 5 || chartTF == 15 || chartTF == 60)
+            {
+                switch (chartTF)
+                {
+                    // 5, 60, 240 min only
+                    case 5: 
+                        IsTimeFrameSelected[0] = 1;
+                        Pama1 = ListOfPamaValues[0];
+
+                        IsTimeFrameSelected[5] = 1;
+                        Pama2 = ListOfPamaValues[5];
+
+                        IsTimeFrameSelected[7] = 1;
+                        Pama3 = ListOfPamaValues[7];
+                        break;
+
+                    // 15, 60, 240 min only
+                    case 15:
+                        IsTimeFrameSelected[2] = 1;
+                        Pama1 = ListOfPamaValues[2];
+
+                        IsTimeFrameSelected[5] = 1;
+                        Pama2 = ListOfPamaValues[5];
+
+                        IsTimeFrameSelected[7] = 1;
+                        Pama3 = ListOfPamaValues[7];
+                        break;
+
+                    // 60, 240 and daily only
+                    case 60:
+                        IsTimeFrameSelected[5] = 1;
+                        Pama1 = ListOfPamaValues[5];
+
+                        IsTimeFrameSelected[7] = 1;
+                        Pama2 = ListOfPamaValues[7];
+
+                        IsTimeFrameSelected[8] = 1;
+                        Pama3 = ListOfPamaValues[8];
+                        break;
+                }
+            }
         }
 
         #endregion
