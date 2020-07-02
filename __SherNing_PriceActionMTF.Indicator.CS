@@ -1,23 +1,4 @@
-﻿//==============================================================================
-// Name           : __SherNing_PAMA
-// Description    : Price Action Moving Average
-// Version        : v.1.0.0
-// Date Created   : 25 - May - 2020
-// Time Taken     : 6 Days
-// Remarks        :
-//==============================================================================
-// Copyright      : 2020, Sher Ning Technologies           
-// License        :      
-//==============================================================================
-
-/* ------------------------------- Version 1.0.0 -------------------------------
- * Slider did not work well. A Textbox for entry is better.
- * Completed new Price Action Moving Average function.
- * Add all other features, review and clean up code.
- * Check std dev calculations
- */
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
@@ -40,7 +21,8 @@ namespace PowerLanguage.Indicator
     //==========================================================================================
 
     /*  ----------------------------------- Version History -----------------------------------
-     *   v.1.0
+     *  v.10
+     *  - Add Highest High for a timeframe feature
      *  ----------------------------------- Version History -----------------------------------
 
      *  ---------------------------------------- Notes ----------------------------------------
@@ -1244,16 +1226,13 @@ namespace PowerLanguage.Indicator
         #region Price Action Moving Average
         private const int GreenColor = 1;
         private const int RedColor = -1;
-        private List<HullMovingAverage> ListOfHMAs;
-        private List<VariableSeries<double>> ListOfHmaValues;
-        private List<VariableSeries<bool>> ListOfIsEndOfBar;
-        private List<VariableSeries<double>> ListOfHighPrices;
-        private List<VariableSeries<double>> ListOfLowPrices;
-        private List<VariableSeries<double>> ListOfOpenPrices;
-        private List<VariableSeries<double>> ListOfClosePrices;
-        private List<VariableSeries<double>> ListOfCalcPrices;
-        private List<VariableSeries<double>> ListOfPamaValues;
-        private List<VariableSeries<double>> ListOfPamaValues1BarAgo;
+        private List<HullMovingAverage> ListOfHMAs; 
+        private List<VariableSeries<double>> ListOfHmaValues, ListOfPamaValues1BarAgo;
+        private List<VariableSeries<bool>> ListOfIsClosingTick;
+        private List<VariableSeries<double>> ListOfHighPrices, ListOfLowPrices;
+        private List<VariableSeries<double>> ListOfHighestHigh, ListOfLowestLow;
+        private List<VariableSeries<double>> ListOfOpenPrices, ListOfClosePrices;
+        private List<VariableSeries<double>> ListOfPamaValues, ListOfCalcPrices;
         private List<VariableSeries<int>> ListOfColorValues;
         private List<StandardDeviationCalculator> ListOfStdDevCalculators;
         private List<VariableSeries<double>> ListOfStdDevValues;
@@ -1262,8 +1241,10 @@ namespace PowerLanguage.Indicator
         private void PAMA_Create()
         {
             ListOfHMAs = new List<HullMovingAverage>();
+            ListOfHighestHigh = new List<VariableSeries<double>>();
+            ListOfLowestLow = new List<VariableSeries<double>>();
             ListOfHmaValues = new List<VariableSeries<double>>();
-            ListOfIsEndOfBar = new List<VariableSeries<bool>>();
+            ListOfIsClosingTick = new List<VariableSeries<bool>>();
             ListOfHighPrices = new List<VariableSeries<double>>();
             ListOfLowPrices = new List<VariableSeries<double>>();
             ListOfOpenPrices = new List<VariableSeries<double>>();
@@ -1282,7 +1263,7 @@ namespace PowerLanguage.Indicator
             {
                 ListOfHMAs.Add(new HullMovingAverage(Length));
                 ListOfHmaValues.Add(new VariableSeries<double>(this));
-                ListOfIsEndOfBar.Add(new VariableSeries<bool>(this));
+                ListOfIsClosingTick.Add(new VariableSeries<bool>(this));
                 ListOfHighPrices.Add(new VariableSeries<double>(this));
                 ListOfLowPrices.Add(new VariableSeries<double>(this));
                 ListOfOpenPrices.Add(new VariableSeries<double>(this));
@@ -1296,6 +1277,9 @@ namespace PowerLanguage.Indicator
                 ListOfPivots.Add(new MovingAveragePivots());
                 ListOfPivotHighValues.Add(new VariableSeries<double>(this));
                 ListOfPivotLowValues.Add(new VariableSeries<double>(this));
+
+                ListOfHighestHigh.Add(new VariableSeries<double>(this));
+                ListOfLowestLow.Add(new VariableSeries<double>(this));
             }
         }
 
@@ -1355,7 +1339,7 @@ namespace PowerLanguage.Indicator
                 // if switch not ON or is DISABLED skip.
                 if (PAMA_TF_Switch[timeFrame] != 1) continue;
 
-                ListOfIsEndOfBar[timeFrame].Value = IsTimeFrameOnCloseTick(timeFrame);
+                ListOfIsClosingTick[timeFrame].Value = IsTimeFrameOnCloseTick(timeFrame);
 
                 // Update private fields members
                 SetPriceDataForHigherTFs(timeFrame);
@@ -1375,16 +1359,72 @@ namespace PowerLanguage.Indicator
                 // Calculate Pivot Values
                 CalculatePivots(timeFrame);
 
+                // calculate swing points
+                CalculateSwingPoints(timeFrame);
+
+
+                //if (ListOfHighestHigh[timeFrame][0] > 0)
+                //{
+                //    Print(DisplayTimeFrameSize(timeFrame));
+                //    Print("Highest High: " + ListOfHighestHigh[timeFrame][0]);
+                //}
+
+                //if (ListOfLowestLow[timeFrame][0] > 0)
+                //{
+                //    Print(DisplayTimeFrameSize(timeFrame));
+                //    Print("LowestLow: " + ListOfLowestLow[timeFrame][0]);
+                //}
+
+               //Output.WriteLine("");
+
                 // End of Bar for each time frame
-                if (ListOfIsEndOfBar[timeFrame].Value == true)
+                if (ListOfIsClosingTick[timeFrame].Value == true)
                     CountNumOfBarsForeachTF[timeFrame] += 1;
             }
 
         }
+        private void CalculateSwingPoints(int timeframe)
+        {
+            // cascade of if-else to evaluate turning points first, each tf called once every bar
+            // cannot use variable series for calculations. Use a list instead
+            if (ListOfIsClosingTick[timeframe].Value == true)
+            {
+                // bottom [2] > [1] < [0]
+                if (ListOfPamaValues[timeframe][2] > ListOfPamaValues[timeframe][1] 
+                    && ListOfPamaValues[timeframe][1] < ListOfPamaValues[timeframe][0])
+                {
+                    //ListOfHighestHigh[timeframe].Value = Bars.HighValue;
+                    Print("Bottom: " + DisplayTimeFrameSize(timeframe));
+                }
+                else // peak [2] < [1] > [0]
+                if (ListOfPamaValues[timeframe][2] < ListOfPamaValues[timeframe][1] 
+                    && ListOfPamaValues[timeframe][1] > ListOfPamaValues[timeframe][0])
+                {
+                    //ListOfLowestLow[timeframe].Value = Bars.LowValue;
+                    Print("Peak: " + DisplayTimeFrameSize(timeframe));
+                }
+                //else // continuation long [1] < [0]
+                //if (ListOfPamaValues[timeframe][0] > ListOfPamaValues[timeframe][1])
+                //{
+                //    // current high > prev recorded high
+                //    if (Bars.HighValue > ListOfHighestHigh[timeframe][1])
+                //        ListOfHighestHigh[timeframe].Value = 
+                //            Math.Max(Bars.HighValue, ListOfHighestHigh[timeframe][1]);
+                //}
+                //else // continuation short [1] > [0]
+                //if (ListOfPamaValues[timeframe][0] < ListOfPamaValues[timeframe][1])
+                //{
+                //    if (Bars.LowValue < ListOfLowestLow[timeframe][1])
+                //        ListOfLowestLow[timeframe].Value =
+                //            Math.Min(Bars.LowValue, ListOfLowestLow[timeframe][1]);
+                //}
+                // do nothing.
+            }
+        }
         private void CalculatePivots(int timeframe)
         {
             // Calculate end of bar for each time frame
-            if (ListOfIsEndOfBar[timeframe].Value == true)
+            if (ListOfIsClosingTick[timeframe].Value == true)
             {
                 // Add
                 ListOfPivots[timeframe].AddHigh(ListOfHighPrices[timeframe].Value);
@@ -1399,7 +1439,7 @@ namespace PowerLanguage.Indicator
         private void CalculateStdDev(int timeframe)
         {
             // Calculate end of bar for each time frame
-            if (ListOfIsEndOfBar[timeframe].Value == true)
+            if (ListOfIsClosingTick[timeframe].Value == true)
             {
                 switch (DataTypeInput)
                 {
@@ -1418,7 +1458,7 @@ namespace PowerLanguage.Indicator
         }
         private void SetPamaColorForHigherTFs(int timeframe)
         {
-            if (ListOfIsEndOfBar[timeframe][0] == true)
+            if (ListOfIsClosingTick[timeframe][0] == true)
             {
                 // should be consider 0 ? zero difference, follow prevailing color.
                 if (ListOfPamaValues[timeframe].Value > ListOfPamaValues1BarAgo[timeframe].Value)
@@ -1434,7 +1474,7 @@ namespace PowerLanguage.Indicator
         private void SetPAMAValueForHigherTFs(int timeframe)
         {
             // EBarStatus == Close for that timeframe.
-            if (ListOfIsEndOfBar[timeframe].Value == true)
+            if (ListOfIsClosingTick[timeframe].Value == true)
             {
                 ListOfPamaValues1BarAgo[timeframe].Value = ListOfPamaValues[timeframe].Value;
 
@@ -1476,7 +1516,7 @@ namespace PowerLanguage.Indicator
 
 
             // EBarStatus == Close for that timeframe.
-            if (ListOfIsEndOfBar[timeframe][0] == true)
+            if (ListOfIsClosingTick[timeframe][0] == true)
             {
                 switch (PriceTypeInput)
                 {
@@ -1510,7 +1550,7 @@ namespace PowerLanguage.Indicator
         {
             if (CountNumOfBarsForeachTF[timeframe] > 0)
             {
-                if (ListOfIsEndOfBar[timeframe][1] == true)
+                if (ListOfIsClosingTick[timeframe][1] == true)
                 {
                     ListOfHighPrices[timeframe].Value = Bars.HighValue;
                     ListOfLowPrices[timeframe].Value = Bars.LowValue;
@@ -1532,7 +1572,7 @@ namespace PowerLanguage.Indicator
                 }
 
                 // Keep track of closing price.
-                if (ListOfIsEndOfBar[timeframe][0] == true)
+                if (ListOfIsClosingTick[timeframe][0] == true)
                     ListOfClosePrices[timeframe].Value = Bars.CloseValue;
             }
         }
