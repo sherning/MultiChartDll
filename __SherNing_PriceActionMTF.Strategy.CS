@@ -23,6 +23,7 @@ namespace PowerLanguage.Strategy
     /*  ----------------------------------- Version History -----------------------------------
      *  v10
      *  - By default, strategy calculates on closing tick, unless IOG = enabled.
+     *  - Separate namespace, therefore, you can use the same class name
      *  ----------------------------------- Version History -----------------------------------
      
 
