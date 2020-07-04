@@ -99,6 +99,7 @@ namespace PowerLanguage.Strategy
     }
 }
 
+// once strategy is completed. integrate back to FuncLib
 namespace PowerLanguage.Function
 {
     //==========================================================================================
