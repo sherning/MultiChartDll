@@ -31,6 +31,9 @@ namespace PowerLanguage.Indicator
         // inputs
         [Input] public int Length { get; set; }
         [Input] public int Smooth { get; set; }
+        [Input] public bool DisplayTF1 { get; set; }
+        [Input] public bool DisplayTF2 { get; set; }
+        [Input] public bool DisplayTF3 { get; set; }
 
         // fields
         private List<IPlotObject> ListOfPlots;
@@ -42,6 +45,10 @@ namespace PowerLanguage.Indicator
         {
             Length = 6;
             Smooth = 10;
+
+            DisplayTF1 = false;
+            DisplayTF2 = false;
+            DisplayTF3 = true;
         }
 
         SherNing_PamaMTF_Funnel Funnel;
@@ -120,6 +127,62 @@ namespace PowerLanguage.Indicator
             // indicator logic 
             Funnel.Call();
 
+            if (DisplayTF1)
+            {
+                int barsAgo;
+
+                // turn positive
+                if (Funnel.PivotChng_TF1[0] == 1)
+                {
+                    barsAgo = Funnel.PivotLowBarAgo_TF1[1];
+                    ListOfPlots[0].Set(barsAgo, Funnel.PivotHigh_TF1[barsAgo]);
+                }
+
+                // turn negative
+                if (Funnel.PivotChng_TF1[0] == -1)
+                {
+                    barsAgo = Funnel.PivotHighBarAgo_TF1[1];
+                    ListOfPlots[1].Set(barsAgo, Funnel.PivotLow_TF1[barsAgo]);
+                }
+            }
+
+            if (DisplayTF2)
+            {
+                int barsAgo;
+
+                // turn positive
+                if (Funnel.PivotChng_TF2[0] == 1)
+                {
+                    barsAgo = Funnel.PivotLowBarAgo_TF2[1];
+                    ListOfPlots[2].Set(barsAgo, Funnel.PivotHigh_TF2[barsAgo]);
+                }
+
+                // turn negative
+                if (Funnel.PivotChng_TF2[0] == -1)
+                {
+                    barsAgo = Funnel.PivotHighBarAgo_TF2[1];
+                    ListOfPlots[3].Set(barsAgo, Funnel.PivotLow_TF2[barsAgo]);
+                }
+            }
+
+            if (DisplayTF3)
+            {
+                int barsAgo;
+
+                // turn positive
+                if (Funnel.PivotChng_TF3[0] == 1)
+                {
+                    barsAgo = Funnel.PivotLowBarAgo_TF3[1];
+                    ListOfPlots[4].Set(barsAgo, Funnel.PivotHigh_TF3[barsAgo]);
+                }
+
+                // turn negative
+                if (Funnel.PivotChng_TF3[0] == -1)
+                {
+                    barsAgo = Funnel.PivotHighBarAgo_TF3[1];
+                    ListOfPlots[5].Set(barsAgo, Funnel.PivotLow_TF3[barsAgo]);
+                }
+            }
         }
 
         #region Print Functions
@@ -338,16 +401,14 @@ namespace PowerLanguage.Function
         private void TrackBarNumber(int timeframe)
         {
             // bottom turning point, red to green
-            if (ListOfPivotValues[timeframe][0] == GreenColor 
-                && ListOfPivotValues[timeframe][1] == RedColor)
+            if (ListOfPivotChg[timeframe][0] == 1)
             {
                 // list of bar number [0], in case it was updated current bar
                 ListOfLowsBarsAgo[timeframe].Value = 
                     Bars.CurrentBar - ListOfBarNumber[timeframe][0];
             }
             else // peak turning point, green to red
-            if (ListOfPivotValues[timeframe][0] == RedColor
-                && ListOfPivotValues[timeframe][1] == GreenColor)
+            if (ListOfPivotChg[timeframe][0] == -1)
             {
                 ListOfHighsBarsAgo[timeframe].Value =
                     Bars.CurrentBar - ListOfBarNumber[timeframe][0];
