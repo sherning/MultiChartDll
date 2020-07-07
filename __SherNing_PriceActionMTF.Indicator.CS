@@ -1359,67 +1359,11 @@ namespace PowerLanguage.Indicator
                 // Calculate Pivot Values
                 CalculatePivots(timeFrame);
 
-                // calculate swing points
-                CalculateSwingPoints(timeFrame);
-
-
-                //if (ListOfHighestHigh[timeFrame][0] > 0)
-                //{
-                //    Print(DisplayTimeFrameSize(timeFrame));
-                //    Print("Highest High: " + ListOfHighestHigh[timeFrame][0]);
-                //}
-
-                //if (ListOfLowestLow[timeFrame][0] > 0)
-                //{
-                //    Print(DisplayTimeFrameSize(timeFrame));
-                //    Print("LowestLow: " + ListOfLowestLow[timeFrame][0]);
-                //}
-
-               //Output.WriteLine("");
-
                 // End of Bar for each time frame
                 if (ListOfIsClosingTick[timeFrame].Value == true)
                     CountNumOfBarsForeachTF[timeFrame] += 1;
             }
 
-        }
-        private void CalculateSwingPoints(int timeframe)
-        {
-            // cascade of if-else to evaluate turning points first, each tf called once every bar
-            // cannot use variable series for calculations. Use a list instead
-            if (ListOfIsClosingTick[timeframe].Value == true)
-            {
-                // bottom [2] > [1] < [0]
-                if (ListOfPamaValues[timeframe][2] > ListOfPamaValues[timeframe][1] 
-                    && ListOfPamaValues[timeframe][1] < ListOfPamaValues[timeframe][0])
-                {
-                    //ListOfHighestHigh[timeframe].Value = Bars.HighValue;
-                    Print("Bottom: " + DisplayTimeFrameSize(timeframe));
-                }
-                else // peak [2] < [1] > [0]
-                if (ListOfPamaValues[timeframe][2] < ListOfPamaValues[timeframe][1] 
-                    && ListOfPamaValues[timeframe][1] > ListOfPamaValues[timeframe][0])
-                {
-                    //ListOfLowestLow[timeframe].Value = Bars.LowValue;
-                    Print("Peak: " + DisplayTimeFrameSize(timeframe));
-                }
-                //else // continuation long [1] < [0]
-                //if (ListOfPamaValues[timeframe][0] > ListOfPamaValues[timeframe][1])
-                //{
-                //    // current high > prev recorded high
-                //    if (Bars.HighValue > ListOfHighestHigh[timeframe][1])
-                //        ListOfHighestHigh[timeframe].Value = 
-                //            Math.Max(Bars.HighValue, ListOfHighestHigh[timeframe][1]);
-                //}
-                //else // continuation short [1] > [0]
-                //if (ListOfPamaValues[timeframe][0] < ListOfPamaValues[timeframe][1])
-                //{
-                //    if (Bars.LowValue < ListOfLowestLow[timeframe][1])
-                //        ListOfLowestLow[timeframe].Value =
-                //            Math.Min(Bars.LowValue, ListOfLowestLow[timeframe][1]);
-                //}
-                // do nothing.
-            }
         }
         private void CalculatePivots(int timeframe)
         {

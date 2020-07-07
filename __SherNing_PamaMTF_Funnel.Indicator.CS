@@ -22,7 +22,8 @@ namespace PowerLanguage.Indicator
 
     /*  ----------------------------------- Version History -----------------------------------
      *  v10
-     *  
+     *  - This indicator is retrospective. Not ideal.
+     *  - The lag is too great.
      *  ----------------------------------- Version History -----------------------------------
      */
     [SameAsSymbol(true)]
@@ -36,7 +37,7 @@ namespace PowerLanguage.Indicator
         [Input] public bool DisplayTF3 { get; set; }
 
         // fields
-        private List<IPlotObject> ListOfPlots;
+        private List<IPlotObject> TrendPlots;
         private string[] PlotNames;
         private EPlotStyle[] PlotStyles;
         private int[] PlotWidths;
@@ -58,7 +59,7 @@ namespace PowerLanguage.Indicator
             Funnel = new SherNing_PamaMTF_Funnel(this);
 
             // List Of Plots
-            ListOfPlots = new List<IPlotObject>();
+            TrendPlots = new List<IPlotObject>();
             PlotNames = new string[6]
             {
                 "TF1_Upper", "TF1_Lower",
@@ -99,13 +100,13 @@ namespace PowerLanguage.Indicator
                 Color.Cyan, Color.Cyan,
 
                 // TF 3
-                Color.Magenta, Color.Magenta,
+                Color.Cyan, Color.Magenta,
             };
 
             // 3 time frames, upper and lower
             for (int i = 0; i < 6; i++)
             {
-                ListOfPlots.Add(AddPlot(new PlotAttributes(
+                TrendPlots.Add(AddPlot(new PlotAttributes(
                         PlotNames[i],
                         EPlotShapes.Line,
                         PlotColors[i],
@@ -129,19 +130,89 @@ namespace PowerLanguage.Indicator
 
             if (DisplayTF1)
             {
+                // new bottom formed. plot previous trend low
+                if (Funnel.TrendState_TF1[0] == 1 && Funnel.TrendState_TF1[1] == -1)
+                {
+                    // arrows
+                    ChartPoint point = new ChartPoint(Funnel.TrendLowBarNum_TF1[0], Funnel.TrendLow_TF1[0]);
+                    var arrow = DrwArrow.Create(point, false);
+                    arrow.Color = Color.Cyan;
 
-               
+                    // plot
+                    int barsBack = Bars.CurrentBar - Funnel.TrendLowBarNum_TF1[0];
+                    TrendPlots[0].Set(barsBack, Funnel.TrendLow_TF1[0]);
+                }
+
+                // new peak formed. plot previous trend high
+                if (Funnel.TrendState_TF1[0] == -1 && Funnel.TrendState_TF1[1] == 1)
+                {
+                    // arrows
+                    ChartPoint point = new ChartPoint(Funnel.TrendHighBarNum_TF1[0], Funnel.TrendHigh_TF1[0]);
+                    var arrow = DrwArrow.Create(point, true);
+                    arrow.Color = Color.Magenta;
+
+                    // set plot 
+                    int barsBack = Bars.CurrentBar - Funnel.TrendHighBarNum_TF1[0];
+                    TrendPlots[1].Set(barsBack, Funnel.TrendHigh_TF1[0]);
+                }
             }
 
             if (DisplayTF2)
             {
+                // new bottom formed. plot previous trend low
+                if (Funnel.TrendState_TF2[0] == 1 && Funnel.TrendState_TF2[1] == -1)
+                {
+                    // arrows
+                    ChartPoint point = new ChartPoint(Funnel.TrendLowBarNum_TF2[0], Funnel.TrendLow_TF2[0]);
+                    var arrow = DrwArrow.Create(point, false);
+                    arrow.Color = Color.Cyan;
 
-                
+                    // plot
+                    int barsBack = Bars.CurrentBar - Funnel.TrendLowBarNum_TF2[0];
+                    TrendPlots[2].Set(barsBack, Funnel.TrendLow_TF2[0]);
+                }
+
+                // new peak formed. plot previous trend high
+                if (Funnel.TrendState_TF2[0] == -1 && Funnel.TrendState_TF2[1] == 1)
+                {
+                    // arrows
+                    ChartPoint point = new ChartPoint(Funnel.TrendHighBarNum_TF2[0], Funnel.TrendHigh_TF2[0]);
+                    var arrow = DrwArrow.Create(point, true);
+                    arrow.Color = Color.Magenta;
+
+                    // set plot 
+                    int barsBack = Bars.CurrentBar - Funnel.TrendHighBarNum_TF2[0];
+                    TrendPlots[3].Set(barsBack, Funnel.TrendHigh_TF2[0]);
+                }
             }
 
             if (DisplayTF3)
             {
+                // new bottom formed. plot previous trend low
+                if (Funnel.TrendState_TF3[0] == 1 && Funnel.TrendState_TF3[1] == -1)
+                {
+                    // arrows
+                    ChartPoint point = new ChartPoint(Funnel.TrendLowBarNum_TF3[0], Funnel.TrendLow_TF3[0]);
+                    var arrow = DrwArrow.Create(point, false);
+                    arrow.Color = Color.Cyan;
 
+                    // plot
+                    int barsBack = Bars.CurrentBar - Funnel.TrendLowBarNum_TF3[0];
+                    TrendPlots[4].Set(barsBack, Funnel.TrendLow_TF3[0]);
+                }
+
+                // new peak formed. plot previous trend high
+                if (Funnel.TrendState_TF3[0] == -1 && Funnel.TrendState_TF3[1] == 1)
+                {
+                    // arrows
+                    ChartPoint point = new ChartPoint(Funnel.TrendHighBarNum_TF3[0], Funnel.TrendHigh_TF3[0]);
+                    var arrow = DrwArrow.Create(point, true);
+                    arrow.Color = Color.Magenta;
+
+                    // set plot 
+                    int barsBack = Bars.CurrentBar - Funnel.TrendHighBarNum_TF3[0];
+                    TrendPlots[5].Set(barsBack, Funnel.TrendHigh_TF3[0]);
+                }
             }
         }
 
@@ -189,6 +260,7 @@ namespace PowerLanguage.Function
      *  - Create Funnel Function
      *  v11
      *  - Bug fixes, refactorization
+     *  - Don't create separate function, e.g. one for funnel, one for std
      *  ----------------------------------- Version History -----------------------------------
      */
     public sealed class SherNing_PamaMTF_Funnel : FunctionSimple<bool> // v11
@@ -197,6 +269,27 @@ namespace PowerLanguage.Function
         public int _Length { get; set; }
         public int _Smooth { get; set; }
         public int _Timeframes { get { return Timeframes; } }
+
+        // return properties
+        public VariableSeries<int> TrendState_TF1 { get; private set; }
+        public VariableSeries<int> TrendState_TF2 { get; private set; }
+        public VariableSeries<int> TrendState_TF3 { get; private set; }
+
+        public VariableSeries<double> TrendHigh_TF1 { get; private set; }
+        public VariableSeries<double> TrendHigh_TF2 { get; private set; }
+        public VariableSeries<double> TrendHigh_TF3 { get; private set; }
+
+        public VariableSeries<double> TrendLow_TF1 { get; private set; }
+        public VariableSeries<double> TrendLow_TF2 { get; private set; }
+        public VariableSeries<double> TrendLow_TF3 { get; private set; }
+
+        public VariableSeries<int> TrendHighBarNum_TF1 { get; private set; }
+        public VariableSeries<int> TrendHighBarNum_TF2 { get; private set; }
+        public VariableSeries<int> TrendHighBarNum_TF3 { get; private set; }
+
+        public VariableSeries<int> TrendLowBarNum_TF1 { get; private set; }
+        public VariableSeries<int> TrendLowBarNum_TF2 { get; private set; }
+        public VariableSeries<int> TrendLowBarNum_TF3 { get; private set; }
 
         public SherNing_PamaMTF_Funnel(CStudyControl _master) : base(_master)
         {
@@ -209,45 +302,56 @@ namespace PowerLanguage.Function
 
         // class fields
         private const int Timeframes = 11;
-        private const int GreenColor = 1;
-        private const int RedColor = -1;
-
         private double Alpha, Gain;
-
-        private int[] BarCount, IsTimeFrameSelected;
-        private List<VariableSeries<double>> ListOfPamaValues, ListOfHmaValues;
-        private List<HullMovingAverage> ListOfHmas;
-        private List<VariableSeries<bool>> ListOfClosingTicks;
-        private List<MultiTimeFrameClosingTick> ClosingTicks;
+        private int[] BarCount, TfSelected;
+        private List<VariableSeries<double>> PamaValues, HmaValues;
+        private List<VariableSeries<bool>> ClosingTicks;
+        private List<HullMovingAverage> HmaFns;
+        private List<MultiTimeFrameClosingTick> ClosingTickFns;
         private double[] Highs, Lows, Opens, Closes, Prices;
 
-        // list of arrays to track turning points
-        private List<double[]> ListOfPivots;
+        // v11 fields
+        private const int GreenColor = 1;
+        private const int RedColor = -1;
+        private List<double[]> PamaValuesList;
+        private List<VariableSeries<int>> TrendState, TrendHighBarNum, TrendLowBarNum;
+        private List<VariableSeries<double>> TrendHigh, TrendLow;
+
 
         protected override void Create()
         {
             // list of calculated values
-            ListOfPamaValues = new List<VariableSeries<double>>();
-            ListOfHmaValues = new List<VariableSeries<double>>();
-            ListOfClosingTicks = new List<VariableSeries<bool>>();
+            PamaValues = new List<VariableSeries<double>>();
+            HmaValues = new List<VariableSeries<double>>();
+            ClosingTicks = new List<VariableSeries<bool>>();
 
             // list of custom functions
-            ClosingTicks = new List<MultiTimeFrameClosingTick>();
-            ListOfHmas = new List<HullMovingAverage>();
+            ClosingTickFns = new List<MultiTimeFrameClosingTick>();
+            HmaFns = new List<HullMovingAverage>();
 
-            // list of arrays
-            ListOfPivots = new List<double[]>();
+            // v11 fields
+            PamaValuesList = new List<double[]>();
+            TrendState = new List<VariableSeries<int>>();
+            TrendHigh = new List<VariableSeries<double>>();
+            TrendHighBarNum = new List<VariableSeries<int>>();
+            TrendLow = new List<VariableSeries<double>>();
+            TrendLowBarNum = new List<VariableSeries<int>>();
 
             for (int i = 0; i < Timeframes; i++)
             {
-                ListOfPamaValues.Add(new VariableSeries<double>(this));
-                ListOfClosingTicks.Add(new VariableSeries<bool>(this));
-                ListOfHmas.Add(new HullMovingAverage(this));
-                ListOfHmaValues.Add(new VariableSeries<double>(this));
-                ClosingTicks.Add(new MultiTimeFrameClosingTick(this));
+                PamaValues.Add(new VariableSeries<double>(this));
+                ClosingTicks.Add(new VariableSeries<bool>(this));
+                HmaFns.Add(new HullMovingAverage(this));
+                HmaValues.Add(new VariableSeries<double>(this));
+                ClosingTickFns.Add(new MultiTimeFrameClosingTick(this));
 
-                // only 3 points needed to determine pivot
-                ListOfPivots.Add(new double[3]);
+                // v11 fields, this in vs is to pass state of current object
+                PamaValuesList.Add(new double[3]);
+                TrendState.Add(new VariableSeries<int>(this));
+                TrendHighBarNum.Add(new VariableSeries<int>(this));
+                TrendLowBarNum.Add(new VariableSeries<int>(this));
+                TrendLow.Add(new VariableSeries<double>(this));
+                TrendHigh.Add(new VariableSeries<double>(this));
             }
         }
         protected override void StartCalc()
@@ -269,15 +373,15 @@ namespace PowerLanguage.Function
             // Set Hma lengths for each Hma object
             for (int i = 0; i < Timeframes; i++)
             {
-                ListOfHmas[i]._Length = _Length;
-                ClosingTicks[i]._TimeFrame = i;
+                HmaFns[i]._Length = _Length;
+                ClosingTickFns[i]._TimeFrame = i;
             }
 
             // initialize list of pivots in event of recalculation
             for (int i = 0; i < Timeframes; i++)
             {
                 for (int j = 0; j < 3; j++)
-                    ListOfPivots[i][j] = 0;
+                    PamaValuesList[i][j] = 0;
             }
 
             // disable timeframes according to chart selected.
@@ -292,10 +396,10 @@ namespace PowerLanguage.Function
             for (int timeframe = 0; timeframe < Timeframes; timeframe++)
             {
                 // if timeframe is not selected, dont calculate.
-                if (IsTimeFrameSelected[timeframe] != 1) continue;
+                if (TfSelected[timeframe] != 1) continue;
 
                 // check for each individual timeframe for closing ticks
-                ListOfClosingTicks[timeframe].Value = ClosingTicks[timeframe].Value;
+                ClosingTicks[timeframe].Value = ClosingTickFns[timeframe].Value;
 
                 // setup price data for each individual timeframe
                 SetPriceData(timeframe);
@@ -306,10 +410,13 @@ namespace PowerLanguage.Function
                 // calculate price action moving average values
                 SetPamaValues(timeframe);
 
-                // set pivot direction
-                SetPamaDirection(timeframe);
+                // set trend state, 1 uptrend, -1 downtrend
+                SetTrendState(timeframe);
 
-                if (ListOfClosingTicks[timeframe].Value == true)
+                // set funnel state, highest high, lowest low values for trend state
+                SetFunnelState(timeframe);
+
+                if (ClosingTicks[timeframe].Value == true)
                     BarCount[timeframe]++;
             }
 
@@ -317,74 +424,116 @@ namespace PowerLanguage.Function
         }
 
         #region Helper Methods
-        private void SetPamaDirection(int timeframe)
+        private void SetFunnelState(int timeframe)
+        {
+            // current state can only be 1 or -1, and not both.
+
+            // bottom turning point
+            if (TrendState[timeframe][1] == -1 && TrendState[timeframe][0] == 1)
+            {
+                // reset highest high value
+                TrendHigh[timeframe].Value = double.MinValue;
+            }
+
+            // peak turning point
+            if (TrendState[timeframe][1] == 1 && TrendState[timeframe][0] == -1)
+            {
+                // reset lowest low value
+                TrendLow[timeframe].Value = double.MaxValue;
+            }
+
+            // trending up
+            if (TrendState[timeframe][0] == 1)
+            {
+                // track highest high value and bar number
+                if (Bars.HighValue > TrendHigh[timeframe][0])
+                {
+                    TrendHigh[timeframe].Value = Bars.HighValue;
+                    TrendHighBarNum[timeframe].Value = Bars.CurrentBar;
+                }
+
+                // notes: before assigning to VS[0], it will hold VS[1] value
+            }
+
+            // trending down
+            if (TrendState[timeframe][0] == -1)
+            {
+                // track lowest low value and bar number
+                if (Bars.LowValue < TrendLow[timeframe][0])
+                {
+                    TrendLow[timeframe].Value = Bars.LowValue;
+                    TrendLowBarNum[timeframe].Value = Bars.CurrentBar;
+                }
+            }
+        }
+        private void SetTrendState(int timeframe)
         {
             // if time frame closing tick is true
-            if (ListOfClosingTicks[timeframe][0])
+            if (ClosingTicks[timeframe][0])
             {
                 // shift cells forward
                 for (int i = 2; i >= 1; i--)
-                    ListOfPivots[timeframe][i] = ListOfPivots[timeframe][i - 1];
+                    PamaValuesList[timeframe][i] = PamaValuesList[timeframe][i - 1];
 
                 // add newest data to index 0
-                ListOfPivots[timeframe][0] = ListOfPamaValues[timeframe].Value;
+                PamaValuesList[timeframe][0] = PamaValues[timeframe].Value;
 
                 // peak [0] < [1] > [2]
-                if (ListOfPivots[timeframe][0] < ListOfPivots[timeframe][1] &&
-                    ListOfPivots[timeframe][1] > ListOfPivots[timeframe][2])
+                if (PamaValuesList[timeframe][0] < PamaValuesList[timeframe][1] &&
+                    PamaValuesList[timeframe][1] > PamaValuesList[timeframe][2])
                 {
+                    // trend line is red color
+                    TrendState[timeframe].Value = RedColor;
                 }
                 else // bottom [0] > [1] < [2]
-                if (ListOfPivots[timeframe][0] > ListOfPivots[timeframe][1] &&
-                    ListOfPivots[timeframe][1] < ListOfPivots[timeframe][2])
+                if (PamaValuesList[timeframe][0] > PamaValuesList[timeframe][1] &&
+                    PamaValuesList[timeframe][1] < PamaValuesList[timeframe][2])
                 {
+                    // trend line is green color
+                    TrendState[timeframe].Value = GreenColor;
                 }
-              
-                // *variable series will use prev value if there is no update.
-            }
-            else
-            {
-                // there is no pivot change 
+
+                // variable series, holds prev end of bar state
             }
         }
         private void SetPamaValues(int timeframe)
         {
             // EBarStatus == Close for that timeframe.
-            if (ListOfClosingTicks[timeframe].Value == true)
+            if (ClosingTicks[timeframe].Value == true)
             {
                 // pass the data to HMA for calculations
-                ListOfHmas[timeframe]._AddData(Prices[timeframe]);
+                HmaFns[timeframe]._AddData(Prices[timeframe]);
 
                 // cache the Hma return values into variableseries.
-                ListOfHmaValues[timeframe].Value = ListOfHmas[timeframe].Value;
+                HmaValues[timeframe].Value = HmaFns[timeframe].Value;
 
                 // original
-                if (Prices[timeframe] - ListOfPamaValues[timeframe][1] > 0)
+                if (Prices[timeframe] - PamaValues[timeframe][1] > 0)
                 {
-                    ListOfPamaValues[timeframe].Value
-                    = Alpha * (ListOfHmaValues[timeframe].Value
-                    + (-Gain) * (ListOfHmaValues[timeframe].Value - ListOfPamaValues[timeframe][1]))
-                    + (1.0 - Alpha) * ListOfPamaValues[timeframe][1];
+                    PamaValues[timeframe].Value
+                    = Alpha * (HmaValues[timeframe].Value
+                    + (-Gain) * (HmaValues[timeframe].Value - PamaValues[timeframe][1]))
+                    + (1.0 - Alpha) * PamaValues[timeframe][1];
                 }
-                else if (Prices[timeframe] - ListOfPamaValues[timeframe][1] < 0)
+                else if (Prices[timeframe] - PamaValues[timeframe][1] < 0)
                 {
-                    ListOfPamaValues[timeframe].Value
-                   = Alpha * (ListOfHmaValues[timeframe].Value
-                   + Gain * (ListOfHmaValues[timeframe].Value - ListOfPamaValues[timeframe][1]))
-                   + (1.0 - Alpha) * ListOfPamaValues[timeframe][1];
+                    PamaValues[timeframe].Value
+                   = Alpha * (HmaValues[timeframe].Value
+                   + Gain * (HmaValues[timeframe].Value - PamaValues[timeframe][1]))
+                   + (1.0 - Alpha) * PamaValues[timeframe][1];
                 }
                 else
                 {
-                    ListOfPamaValues[timeframe].Value
-                   = Alpha * (ListOfHmaValues[timeframe].Value
-                   + 0.0 * (ListOfHmaValues[timeframe].Value - ListOfPamaValues[timeframe][1]))
-                   + (1.0 - Alpha) * ListOfPamaValues[timeframe][1];
+                    PamaValues[timeframe].Value
+                   = Alpha * (HmaValues[timeframe].Value
+                   + 0.0 * (HmaValues[timeframe].Value - PamaValues[timeframe][1]))
+                   + (1.0 - Alpha) * PamaValues[timeframe][1];
                 }
             }
         }
         private void SetPriceTypes(int timeframe)
         {
-            if (ListOfClosingTicks[timeframe][0] == true)
+            if (ClosingTicks[timeframe][0] == true)
                 Prices[timeframe] = Closes[timeframe];
         }
         private void SetPriceData(int timeframe)
@@ -392,7 +541,7 @@ namespace PowerLanguage.Function
             if (BarCount[timeframe] > 0)
             {
                 // next regular bar after closing tick for calculated timeframe
-                if (ListOfClosingTicks[timeframe][1] == true)
+                if (ClosingTicks[timeframe][1] == true)
                 {
                     Highs[timeframe] = Bars.HighValue;
                     Lows[timeframe] = Bars.LowValue;
@@ -410,7 +559,7 @@ namespace PowerLanguage.Function
                 }
 
                 // Keep track of closing price.
-                if (ListOfClosingTicks[timeframe][0] == true)
+                if (ClosingTicks[timeframe][0] == true)
                     Closes[timeframe] = Bars.CloseValue;
             }
         }
@@ -423,46 +572,84 @@ namespace PowerLanguage.Function
             // ------------------------ Timeframe Index Table ------------------------ //
 
             // clear all previous values.
-            IsTimeFrameSelected = new int[Timeframes];
+            TfSelected = new int[Timeframes];
 
             // Get bar resolution.
             int chartTF = (int)Bars.Info.Resolution.Size;
 
             // if none of the above cases, disable all calculations.
             for (int i = 0; i < Timeframes; i++)
-                IsTimeFrameSelected[i] = -1;
+                TfSelected[i] = -1;
 
             switch (chartTF)
             {
                 case 5:
-                    IsTimeFrameSelected[0] = 1;
-                   
+                    TfSelected[0] = 1;
+                    TrendState_TF1 = TrendState[0];
+                    TrendHigh_TF1 = TrendHigh[0];
+                    TrendLow_TF1 = TrendLow[0];
+                    TrendHighBarNum_TF1 = TrendHighBarNum[0];
+                    TrendLowBarNum_TF1 = TrendLowBarNum[0];
 
-                    IsTimeFrameSelected[5] = 1;
-                   
+                    TfSelected[5] = 1;
+                    TrendState_TF2 = TrendState[5];
+                    TrendHigh_TF2 = TrendHigh[5];
+                    TrendLow_TF2 = TrendLow[5];
+                    TrendHighBarNum_TF2 = TrendHighBarNum[5];
+                    TrendLowBarNum_TF2 = TrendLowBarNum[5];
 
-                    IsTimeFrameSelected[7] = 1;
-                   
-
+                    TfSelected[7] = 1;
+                    TrendState_TF3 = TrendState[7];
+                    TrendHigh_TF3 = TrendHigh[7];
+                    TrendLow_TF3 = TrendLow[7];
+                    TrendHighBarNum_TF3 = TrendHighBarNum[7];
+                    TrendLowBarNum_TF3 = TrendLowBarNum[7];
                     break;
 
                 case 15:
-                    IsTimeFrameSelected[2] = 1;
-                  
-                    IsTimeFrameSelected[5] = 1;
-                   
-                    IsTimeFrameSelected[7] = 1;
-                   
+                    TfSelected[2] = 1;
+                    TrendState_TF1 = TrendState[2];
+                    TrendHigh_TF1 = TrendHigh[2];
+                    TrendLow_TF1 = TrendLow[2];
+                    TrendHighBarNum_TF1 = TrendHighBarNum[2];
+                    TrendLowBarNum_TF1 = TrendLowBarNum[2];
+
+                    TfSelected[5] = 1;
+                    TrendState_TF2 = TrendState[5];
+                    TrendHigh_TF2 = TrendHigh[5];
+                    TrendLow_TF2 = TrendLow[5];
+                    TrendHighBarNum_TF2 = TrendHighBarNum[5];
+                    TrendLowBarNum_TF2 = TrendLowBarNum[5];
+
+                    TfSelected[7] = 1;
+                    TrendState_TF3 = TrendState[7];
+                    TrendHigh_TF3 = TrendHigh[7];
+                    TrendLow_TF3 = TrendLow[7];
+                    TrendHighBarNum_TF3 = TrendHighBarNum[7];
+                    TrendLowBarNum_TF3 = TrendLowBarNum[7];
                     break;
 
                 case 60:
-                    IsTimeFrameSelected[5] = 1;
-                   
+                    TfSelected[5] = 1;
+                    TrendState_TF1 = TrendState[5];
+                    TrendHigh_TF1 = TrendHigh[5];
+                    TrendLow_TF1 = TrendLow[5];
+                    TrendHighBarNum_TF1 = TrendHighBarNum[5];
+                    TrendLowBarNum_TF1 = TrendLowBarNum[5];
 
-                    IsTimeFrameSelected[7] = 1;
-                    
-                    IsTimeFrameSelected[8] = 1;
-                  
+                    TfSelected[7] = 1;
+                    TrendState_TF2 = TrendState[7];
+                    TrendHigh_TF2 = TrendHigh[7];
+                    TrendLow_TF2 = TrendLow[7];
+                    TrendHighBarNum_TF2 = TrendHighBarNum[7];
+                    TrendLowBarNum_TF2 = TrendLowBarNum[7];
+
+                    TfSelected[8] = 1;
+                    TrendState_TF3 = TrendState[8];
+                    TrendHigh_TF3 = TrendHigh[8];
+                    TrendLow_TF3 = TrendLow[8];
+                    TrendHighBarNum_TF3 = TrendHighBarNum[8];
+                    TrendLowBarNum_TF3 = TrendLowBarNum[8];
                     break;
             }
         }
@@ -516,7 +703,7 @@ namespace PowerLanguage.Function
         public VariableSeries<int> PivotLowBarAgo_TF2 { get; private set; }
         public VariableSeries<int> PivotLowBarAgo_TF3 { get; private set; }
 
-        public SherNing_PamaMTF_Funnelv10 (CStudyControl _master) : base(_master)
+        public SherNing_PamaMTF_Funnelv10(CStudyControl _master) : base(_master)
         {
             // ------------------------ Timeframe Index Table ------------------------ //
             // 0 - 5min,   1 - 10min,  2 - 15min, 3 - 20min, 4 - 30min, 5 - 60min,     //
@@ -937,7 +1124,7 @@ namespace PowerLanguage.Function
         public int _Smooth { get; set; }
         public int _Timeframes { get { return Timeframes; } }
 
-        public SherNing_PamaMTF_Funnelv00 (CStudyControl _master) : base(_master)
+        public SherNing_PamaMTF_Funnelv00(CStudyControl _master) : base(_master)
         {
             // ------------------------ Timeframe Index Table ------------------------ //
             // 0 - 5min,   1 - 10min,  2 - 15min, 3 - 20min, 4 - 30min, 5 - 60min,     //
@@ -1078,7 +1265,7 @@ namespace PowerLanguage.Function
                     ListOfPivots[timeframe][1] < ListOfPivots[timeframe][2])
                 {
                 }
-              
+
                 // *variable series will use prev value if there is no update.
             }
             else
@@ -1175,33 +1362,33 @@ namespace PowerLanguage.Function
             {
                 case 5:
                     IsTimeFrameSelected[0] = 1;
-                   
+
 
                     IsTimeFrameSelected[5] = 1;
-                   
+
 
                     IsTimeFrameSelected[7] = 1;
-                   
+
 
                     break;
 
                 case 15:
                     IsTimeFrameSelected[2] = 1;
-                  
+
                     IsTimeFrameSelected[5] = 1;
-                   
+
                     IsTimeFrameSelected[7] = 1;
-                   
+
                     break;
 
                 case 60:
                     IsTimeFrameSelected[5] = 1;
-                   
+
 
                     IsTimeFrameSelected[7] = 1;
-                    
+
                     IsTimeFrameSelected[8] = 1;
-                  
+
                     break;
             }
         }
