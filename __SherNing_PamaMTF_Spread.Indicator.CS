@@ -7,6 +7,7 @@ using PowerLanguage.Function;
 
 namespace PowerLanguage.Indicator
 {
+    [UpdateOnEveryTick(false)]
     public class __SherNing_PamaMTF_Spread : IndicatorObject
     {
         //==========================================================================================
@@ -29,26 +30,90 @@ namespace PowerLanguage.Indicator
          */
 
         // properties
+        [Input] public int Length { get; set; }
+        [Input] public int StdDevLength { get; set; }
+        [Input] public int Smooth { get; set; }
         [Input] public string FastTimeFrame { get; set; }
         [Input] public string SlowTimeFrame { get; set; }
 
         // fields
+        private const int NumPlots = 4;
         private SherNing_PamaMTF_Spread PamaSpd;
+        private List<IPlotObject> StdDevPlots;
+        private IPlotObject SpreadPlot;
+        private string[] PlotNames;
+        private Color[] PlotColors;
 
         public __SherNing_PamaMTF_Spread(object _ctx) : base(_ctx)
         {
+            // default input values
+            Length = 6;
+            StdDevLength = 6;
+            Smooth = 10;
             FastTimeFrame = "5";
             SlowTimeFrame = "240";
         }
         protected override void Create()
         {
             PamaSpd = new SherNing_PamaMTF_Spread(this);
+
+            // std dev plot properties
+            StdDevPlots = new List<IPlotObject>();
+            PlotNames = new string[]
+            {
+                "1st StdDev Upper", "1st StdDev Lower", "2nd StdDev Upper", "2nd StdDev Lower"
+            };
+
+            PlotColors = new Color[]
+            {
+                Color.Cyan, Color.Cyan, Color.Yellow, Color.Yellow
+            };
+
+            // 1st and 2nd std dev only
+            for (int i = 0; i < NumPlots; i++)
+            {
+                StdDevPlots.Add(AddPlot(new PlotAttributes(
+                    // name,             shape,          color,     bg color, width, style,        lastmarker
+                    PlotNames[i], EPlotShapes.Line, PlotColors[i], Color.Black, 1, EPlotStyle.Solid, true)));
+            }
+
+            // set color in calcbar, use default color green
+            SpreadPlot = AddPlot(new PlotAttributes(
+                "Spread", EPlotShapes.Histogram, Color.White, Color.Black, 5, EPlotStyle.Solid, true));
         }
         protected override void StartCalc()
         {
+            // set function properties
+            PamaSpd._Length = Length;
+            PamaSpd._StdDevLength = StdDevLength;
+            PamaSpd._Smooth = Smooth;
+            PamaSpd._SlowTF = SlowTimeFrame;
+            PamaSpd._FastTF = FastTimeFrame;
         }
         protected override void CalcBar()
         {
+            PamaSpd.Call();
+
+            // check if update on everytick == false, no need to use EBarState == close ? true.
+
+            // the difference between the two chosen time frame / std of the difference
+            double spread = PamaSpd._Spreads[0] / PamaSpd._StdDev[0];
+            Color spreadColor;
+
+            // Set spread color
+            if (spread > 0)
+                spreadColor = Color.LimeGreen;
+            else
+                spreadColor = Color.Red;
+
+            // set spread plot
+            SpreadPlot.Set(spread, spreadColor);
+
+            // Set up the lines.
+            StdDevPlots[0].Set(50);
+            StdDevPlots[1].Set(-50);
+            StdDevPlots[2].Set(100);
+            StdDevPlots[3].Set(-100);
         }
 
         #region Print Functions
@@ -97,12 +162,15 @@ namespace PowerLanguage.Function
 
         // properties
         public int _Length { get; set; }
+        public int _StdDevLength { get; set; }
         public int _Smooth { get; set; }
         public string _FastTF { get; set; }
         public string _SlowTF { get; set; }
 
         // return properties
         public int _Timeframes { get { return Timeframes; } }
+        public VariableSeries<double> _StdDev { get { return StdDevValue; } }
+        public VariableSeries<double> _Spreads { get { return PamaSpd; } }
 
         public SherNing_PamaMTF_Spread(CStudyControl _master) : base(_master)
         {
@@ -117,16 +185,23 @@ namespace PowerLanguage.Function
         private const int Timeframes = 11;
         private double Alpha, Gain;
         private int[] BarCount, IsTimeFrameSelected;
-        private List<VariableSeries<double>> ListOfPamaValues, ListOfHmaValues;
+        private List<VariableSeries<double>> PamaValues, ListOfHmaValues;
         private List<HullMovingAverage> ListOfHmas;
         private List<VariableSeries<bool>> ListOfClosingTicks;
         private List<MultiTimeFrameClosingTick> ClosingTicks;
         private double[] Highs, Lows, Opens, Closes, Prices;
 
+        // track which pama values are being used
+        private int FastIdx, SlowIdx;
+        private VariableSeries<double> PamaSpd, StdDevValue;
+
+        // std variables
+        private StandardDeviationCalculator StdDev;
+
         protected override void Create()
         {
             // list of calculated values
-            ListOfPamaValues = new List<VariableSeries<double>>();
+            PamaValues = new List<VariableSeries<double>>();
             ListOfHmaValues = new List<VariableSeries<double>>();
             ListOfClosingTicks = new List<VariableSeries<bool>>();
 
@@ -136,12 +211,17 @@ namespace PowerLanguage.Function
 
             for (int i = 0; i < Timeframes; i++)
             {
-                ListOfPamaValues.Add(new VariableSeries<double>(this));
+                PamaValues.Add(new VariableSeries<double>(this));
                 ListOfClosingTicks.Add(new VariableSeries<bool>(this));
                 ListOfHmas.Add(new HullMovingAverage(this));
                 ListOfHmaValues.Add(new VariableSeries<double>(this));
                 ClosingTicks.Add(new MultiTimeFrameClosingTick(this));
             }
+
+            // track spread
+            PamaSpd = new VariableSeries<double>(this);
+            StdDev = new StandardDeviationCalculator(this);
+            StdDevValue = new VariableSeries<double>(this);
         }
         protected override void StartCalc()
         {
@@ -165,6 +245,11 @@ namespace PowerLanguage.Function
                 ListOfHmas[i]._Length = _Length;
                 ClosingTicks[i]._TimeFrame = i;
             }
+
+            // set function properties
+            StdDev._Length = _StdDevLength;
+            StdDev._PopulationStdDev = true;
+            StdDev._Price = PamaSpd;
 
             // disable timeframes according to chart selected.
             SetTFsForCalculationBasedOnInterval();
@@ -196,10 +281,21 @@ namespace PowerLanguage.Function
                     BarCount[timeframe]++;
             }
 
+            // end of bar calculate the spread of two chosen timeframe
+            CalculateSpreads();
+
             return false;
         }
 
         #region Helper Methods
+        private void CalculateSpreads()
+        {
+            // track the differences in value
+            PamaSpd.Value = PamaValues[FastIdx][0] - PamaValues[SlowIdx][0];
+
+            // reference std dev return function value to return call
+            StdDevValue.Value = StdDev.Value;
+        }
         private void SetPamaValues(int timeframe)
         {
             // EBarStatus == Close for that timeframe.
@@ -212,26 +308,26 @@ namespace PowerLanguage.Function
                 ListOfHmaValues[timeframe].Value = ListOfHmas[timeframe].Value;
 
                 // original
-                if (Prices[timeframe] - ListOfPamaValues[timeframe][1] > 0)
+                if (Prices[timeframe] - PamaValues[timeframe][1] > 0)
                 {
-                    ListOfPamaValues[timeframe].Value
+                    PamaValues[timeframe].Value
                     = Alpha * (ListOfHmaValues[timeframe].Value
-                    + (-Gain) * (ListOfHmaValues[timeframe].Value - ListOfPamaValues[timeframe][1]))
-                    + (1.0 - Alpha) * ListOfPamaValues[timeframe][1];
+                    + (-Gain) * (ListOfHmaValues[timeframe].Value - PamaValues[timeframe][1]))
+                    + (1.0 - Alpha) * PamaValues[timeframe][1];
                 }
-                else if (Prices[timeframe] - ListOfPamaValues[timeframe][1] < 0)
+                else if (Prices[timeframe] - PamaValues[timeframe][1] < 0)
                 {
-                    ListOfPamaValues[timeframe].Value
+                    PamaValues[timeframe].Value
                    = Alpha * (ListOfHmaValues[timeframe].Value
-                   + Gain * (ListOfHmaValues[timeframe].Value - ListOfPamaValues[timeframe][1]))
-                   + (1.0 - Alpha) * ListOfPamaValues[timeframe][1];
+                   + Gain * (ListOfHmaValues[timeframe].Value - PamaValues[timeframe][1]))
+                   + (1.0 - Alpha) * PamaValues[timeframe][1];
                 }
                 else
                 {
-                    ListOfPamaValues[timeframe].Value
+                    PamaValues[timeframe].Value
                    = Alpha * (ListOfHmaValues[timeframe].Value
-                   + 0.0 * (ListOfHmaValues[timeframe].Value - ListOfPamaValues[timeframe][1]))
-                   + (1.0 - Alpha) * ListOfPamaValues[timeframe][1];
+                   + 0.0 * (ListOfHmaValues[timeframe].Value - PamaValues[timeframe][1]))
+                   + (1.0 - Alpha) * PamaValues[timeframe][1];
                 }
             }
         }
@@ -279,19 +375,19 @@ namespace PowerLanguage.Function
             IsTimeFrameSelected = new int[Timeframes];
 
             // check if fast and slow TF are valid
-            int fastIdx = TimeFrameIndexConversion(_FastTF);
-            int slowIdx = TimeFrameIndexConversion(_SlowTF);
+            FastIdx = TimeFrameIndexConversion(_FastTF);
+            SlowIdx = TimeFrameIndexConversion(_SlowTF);
 
             // check if fast index < slow index
-            if (fastIdx >= slowIdx) return;
+            if (FastIdx >= SlowIdx) return;
 
             // if none of the above cases, disable all calculations.
             for (int i = 0; i < Timeframes; i++)
                 IsTimeFrameSelected[i] = -1;
 
             // set time frame for calculation
-            IsTimeFrameSelected[fastIdx] = 1;
-            IsTimeFrameSelected[slowIdx] = 1;
+            IsTimeFrameSelected[FastIdx] = 1;
+            IsTimeFrameSelected[SlowIdx] = 1;
         }
         private int TimeFrameIndexConversion(string timeframe)
         {
@@ -302,9 +398,6 @@ namespace PowerLanguage.Function
             // ------------------------ Timeframe Index Table ------------------------ //
             switch (timeframe.ToLower())
             {
-                default:
-                    return (int)Bars.Info.Resolution.Size;
-
                 case "5":
                     return 0;
 
@@ -338,6 +431,10 @@ namespace PowerLanguage.Function
                 case "month":
                     return 10;
             }
+
+            // if none of the above, return the index of current resolution
+            int resoSize = (int)Bars.Info.Resolution.Size;
+            return TimeFrameIndexConversion(resoSize.ToString());
         }
 
         #endregion
