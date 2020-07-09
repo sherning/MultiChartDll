@@ -29,16 +29,16 @@ namespace PowerLanguage.Indicator
          */
 
         // properties
-        [Input] public int FastTimeFrame { get; set; }
-        [Input] public int SlowTimeFrame { get; set; }
+        [Input] public string FastTimeFrame { get; set; }
+        [Input] public string SlowTimeFrame { get; set; }
 
         // fields
         private SherNing_PamaMTF_Spread PamaSpd;
 
         public __SherNing_PamaMTF_Spread(object _ctx) : base(_ctx)
         {
-            FastTimeFrame = 5;
-            SlowTimeFrame = 240;
+            FastTimeFrame = "5";
+            SlowTimeFrame = "240";
         }
         protected override void Create()
         {
@@ -98,8 +98,8 @@ namespace PowerLanguage.Function
         // properties
         public int _Length { get; set; }
         public int _Smooth { get; set; }
-        public int FastTF { get; set; }
-        public int SlowTF { get; set; }
+        public string _FastTF { get; set; }
+        public string _SlowTF { get; set; }
 
         // return properties
         public int _Timeframes { get { return Timeframes; } }
@@ -278,45 +278,65 @@ namespace PowerLanguage.Function
             // clear all previous values.
             IsTimeFrameSelected = new int[Timeframes];
 
-            // Get bar resolution.
-            int chartTF = (int)Bars.Info.Resolution.Size;
+            // check if fast and slow TF are valid
+            int fastIdx = TimeFrameIndexConversion(_FastTF);
+            int slowIdx = TimeFrameIndexConversion(_SlowTF);
+
+            // check if fast index < slow index
+            if (fastIdx >= slowIdx) return;
 
             // if none of the above cases, disable all calculations.
             for (int i = 0; i < Timeframes; i++)
                 IsTimeFrameSelected[i] = -1;
 
-            switch (chartTF)
+            // set time frame for calculation
+            IsTimeFrameSelected[fastIdx] = 1;
+            IsTimeFrameSelected[slowIdx] = 1;
+        }
+        private int TimeFrameIndexConversion(string timeframe)
+        {
+            // ------------------------ Timeframe Index Table ------------------------ //
+            // 0 - 5min,   1 - 10min,  2 - 15min, 3 - 20min, 4 - 30min, 5 - 60min,     //
+            // 6 - 120min, 7 - 240min, 8 - day,   9 - week,  10- month                 //
+            //                                                                         //     
+            // ------------------------ Timeframe Index Table ------------------------ //
+            switch (timeframe.ToLower())
             {
-                case 5:
-                    IsTimeFrameSelected[0] = 1;
+                default:
+                    return (int)Bars.Info.Resolution.Size;
 
+                case "5":
+                    return 0;
 
-                    IsTimeFrameSelected[5] = 1;
+                case "10":
+                    return 1;
 
+                case "15":
+                    return 2;
 
-                    IsTimeFrameSelected[7] = 1;
+                case "20":
+                    return 3;
 
+                case "30":
+                    return 4;
 
-                    break;
+                case "60":
+                    return 5;
 
-                case 15:
-                    IsTimeFrameSelected[2] = 1;
+                case "120":
+                    return 6;
 
-                    IsTimeFrameSelected[5] = 1;
+                case "240":
+                    return 7;
 
-                    IsTimeFrameSelected[7] = 1;
+                case "day":
+                    return 8;
 
-                    break;
+                case "week":
+                    return 9;
 
-                case 60:
-                    IsTimeFrameSelected[5] = 1;
-
-
-                    IsTimeFrameSelected[7] = 1;
-
-                    IsTimeFrameSelected[8] = 1;
-
-                    break;
+                case "month":
+                    return 10;
             }
         }
 
