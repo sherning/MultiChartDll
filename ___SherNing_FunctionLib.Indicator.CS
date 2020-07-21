@@ -303,6 +303,8 @@ namespace PowerLanguage.Function
         // get accessors
         public double PivotHighs { get { return GetPivotHigh(); } }
         public double PivotLows { get { return GetPivotLow(); } }
+        public bool IsPrevPivotHigh { get { return IsPivotHigh(); } }
+        public bool IsPrevPivotLow { get { return IsPivotLow(); } }
 
         // class fields, 3 points required to determine a turning point
         private const int DataPoints = 3;

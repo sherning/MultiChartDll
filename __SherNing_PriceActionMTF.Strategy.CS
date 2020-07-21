@@ -48,6 +48,7 @@ namespace PowerLanguage.Strategy
 
         private PriceActionMovingAverageStrategyFunction PamaFunction;
         private VariableSeries<double> Pama1, Pama2, Pama3;
+        private IOrderMarket BuyMkt, ShortMkt;
 
         protected override void Create()
         {
@@ -55,6 +56,16 @@ namespace PowerLanguage.Strategy
             Pama1 = new VariableSeries<double>(this);
             Pama2 = new VariableSeries<double>(this);
             Pama3 = new VariableSeries<double>(this);
+
+            BuyMkt = OrderCreator.MarketNextBar(new SOrderParameters(
+                Contracts.UserSpecified, 
+                "LE_Mkt", 
+                EOrderAction.Buy));
+
+            ShortMkt = OrderCreator.MarketNextBar(new SOrderParameters(
+                Contracts.UserSpecified,
+                "SE_Mkt",
+                EOrderAction.SellShort));
         }
 
         protected override void StartCalc()
@@ -70,14 +81,13 @@ namespace PowerLanguage.Strategy
             Pama1 = PamaFunction._Pama_1;
             Pama2 = PamaFunction._Pama_2;
             Pama3 = PamaFunction._Pama_3;
+
+            // create higher timeframe entry
         }
         protected override void CalcBar()
         {
             PamaFunction.Call();
 
-            if (Bars.LastBarOnChart)
-            {
-            }
         }
 
         #region Print Functions
