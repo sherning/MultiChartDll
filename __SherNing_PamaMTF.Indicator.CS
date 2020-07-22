@@ -96,11 +96,12 @@ namespace PowerLanguage.Indicator
                 PamaPlots.Add(AddPlot(new PlotAttributes(PamaPlotNames[i])));
             }
 
-            for (int i = 1; i <= 2 * Timeframes ; i++)
-                PamaPivots.Add(new VariableSeries<double>(this));
+            // not required.
+            //for (int i = 1; i <= 2 * Timeframes; i++)
+            //    PamaPivots.Add(new VariableSeries<double>(this));
 
-            for (int i = 1; i <= 4 * Timeframes; i++)
-                PamaStdDev.Add(new VariableSeries<double>(this));
+            //for (int i = 1; i <= 4 * Timeframes; i++)
+            //    PamaStdDev.Add(new VariableSeries<double>(this));
         }
 
         protected override void StartCalc()

@@ -46,16 +46,26 @@ namespace PowerLanguage.Strategy
             Smooth = 10;
         }
 
+        private TestFunction Test;
+        private VariableSeries<double> TestSeries;
+
         private PriceActionMovingAverageStrategyFunction PamaFunction;
         private VariableSeries<double> Pama1, Pama2, Pama3;
         private IOrderMarket BuyMkt, ShortMkt;
+        private List<double> Pama3List;
 
         protected override void Create()
         {
+
+            Test = new TestFunction(this);
+
             PamaFunction = new PriceActionMovingAverageStrategyFunction(this);
+
             Pama1 = new VariableSeries<double>(this);
             Pama2 = new VariableSeries<double>(this);
             Pama3 = new VariableSeries<double>(this);
+
+            Pama3List = new List<double>();
 
             BuyMkt = OrderCreator.MarketNextBar(new SOrderParameters(
                 Contracts.UserSpecified, 
@@ -66,6 +76,8 @@ namespace PowerLanguage.Strategy
                 Contracts.UserSpecified,
                 "SE_Mkt",
                 EOrderAction.SellShort));
+
+            Output.Clear();
         }
 
         protected override void StartCalc()
@@ -78,16 +90,42 @@ namespace PowerLanguage.Strategy
             PamaFunction._StdDevLength = 6;
 
             // point strategy to function reference
-            Pama1 = PamaFunction._Pama_1;
-            Pama2 = PamaFunction._Pama_2;
-            Pama3 = PamaFunction._Pama_3;
+            //Pama1 = PamaFunction._Pama_1;
+            //Pama2 = PamaFunction._Pama_2;
+            //Pama3 = PamaFunction._Pama_3;
 
-            // create higher timeframe entry
+            TestSeries = Test.ClosePrice;
         }
         protected override void CalcBar()
         {
-            PamaFunction.Call();
+            if (Bars.CurrentBar == 1) Output.Clear();
 
+            PamaFunction.Call();
+            Test.Call();
+
+            Print("Test: " + TestSeries[0]);
+        }
+
+        private int Pama3Pivot()
+        {
+            // No update in Pama3 price
+            if (Pama3[0] == Pama3[1]) return 0;
+
+            // add
+            Pama3List.Insert(0, Pama3[0]);
+
+            Print("Test");
+
+            // check for sufficient data
+            if (Pama3List.Count == 3)
+            {
+                Print("Pama Value: " + Pama3List[0]);
+            }
+
+            // remove [newest][1][2]
+            Pama3List.RemoveAt(2);
+
+            return 0;
         }
 
         #region Print Functions
@@ -109,6 +147,37 @@ namespace PowerLanguage.Strategy
         #endregion
     }
 }
+
+namespace PowerLanguage.Function
+{
+    public sealed class TestFunction : FunctionSimple<bool>
+    {
+        // test this first, then test autoproperties
+        public VariableSeries<double> ClosePrice { get; private set; }
+        public TestFunction(CStudyControl m):base(m)
+        {
+
+        }
+
+        protected override void Create()
+        {
+            ClosePrice = new VariableSeries<double>(this);
+        }
+
+        protected override void StartCalc()
+        {
+        }
+
+        protected override bool CalcBar()
+        {
+            ClosePrice.Value = Bars.CloseValue;
+            return false;
+        }
+    }
+
+}
+
+
 
 // once strategy is completed. integrate back to FuncLib
 namespace PowerLanguage.Function
