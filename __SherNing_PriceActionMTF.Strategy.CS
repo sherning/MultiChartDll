@@ -46,25 +46,21 @@ namespace PowerLanguage.Strategy
             Smooth = 10;
         }
 
-        private TestFunction Test;
         private VariableSeries<double> TestSeries;
 
         private PriceActionMovingAverageStrategyFunction PamaFunction;
         private VariableSeries<double> Pama1, Pama2, Pama3;
         private IOrderMarket BuyMkt, ShortMkt;
-        private List<double> Pama3List;
+        private List<double> Pama1List, Pama2List, Pama3List;
 
         protected override void Create()
         {
-
-            Test = new TestFunction(this);
-
+            Output.Clear();
             PamaFunction = new PriceActionMovingAverageStrategyFunction(this);
 
-            Pama1 = new VariableSeries<double>(this);
-            Pama2 = new VariableSeries<double>(this);
-            Pama3 = new VariableSeries<double>(this);
-
+            // store return value in list
+            Pama1List = new List<double>();
+            Pama2List = new List<double>();
             Pama3List = new List<double>();
 
             BuyMkt = OrderCreator.MarketNextBar(new SOrderParameters(
@@ -76,8 +72,6 @@ namespace PowerLanguage.Strategy
                 Contracts.UserSpecified,
                 "SE_Mkt",
                 EOrderAction.SellShort));
-
-            Output.Clear();
         }
 
         protected override void StartCalc()
@@ -89,43 +83,119 @@ namespace PowerLanguage.Strategy
             PamaFunction._Smooth = Smooth;
             PamaFunction._StdDevLength = 6;
 
-            // point strategy to function reference
-            //Pama1 = PamaFunction._Pama_1;
-            //Pama2 = PamaFunction._Pama_2;
-            //Pama3 = PamaFunction._Pama_3;
-
-            TestSeries = Test.ClosePrice;
+            Pama3List.Clear();
         }
         protected override void CalcBar()
         {
-            if (Bars.CurrentBar == 1) Output.Clear();
-
-            PamaFunction.Call();
-            Test.Call();
-
-            Print("Test: " + TestSeries[0]);
-        }
-
-        private int Pama3Pivot()
-        {
-            // No update in Pama3 price
-            if (Pama3[0] == Pama3[1]) return 0;
-
-            // add
-            Pama3List.Insert(0, Pama3[0]);
-
-            Print("Test");
-
-            // check for sufficient data
-            if (Pama3List.Count == 3)
+            // strategy start calc called before function
+            if (Bars.CurrentBar == 1)
             {
-                Print("Pama Value: " + Pama3List[0]);
+                // point strategy to function reference
+                Pama1 = PamaFunction.Pama1;
+                Pama2 = PamaFunction.Pama2;
+                Pama3 = PamaFunction.Pama3;
             }
 
-            // remove [newest][1][2]
-            Pama3List.RemoveAt(2);
+            PamaFunction.Call();
 
-            return 0;
+            if (Bars.CurrentBar > 1)
+            {
+                int shortDirection = ShortTimeFramePivot();
+                int midDirection = MiddleTimeFramePivot();
+                int longDirection = LongTimeFramePivot();
+
+                if (midDirection == 1 && shortDirection == 1)
+                {
+                    BuyMkt.Send(100000);
+                }
+
+                if (midDirection == -1 && shortDirection == -1)
+                {
+                    ShortMkt.Send(100000);
+                }
+            }
+        }
+
+        private int LongTimeFramePivot()
+        {
+            // call this function once per bar only
+            if (Pama3[0] == Pama3[1]) return 0;
+
+            // newest at index [0]
+            Pama3List.Insert(0, Pama3[0]);
+
+            int direction = 0;
+
+            if(Pama3List.Count == 3)
+            {
+                // Bottom [0] > [1] < [2] 
+                if (Pama3List[0] > Pama3List[1] && Pama3List[1] < Pama3List[2])
+                    direction = 1;
+
+                // Peak [0] < [1] > [2] 
+                else if (Pama3List[0] < Pama3List[1] && Pama3List[1] > Pama3List[2])
+                    direction = -1;
+
+                // remove oldest from list [2]
+                Pama3List.RemoveAt(2);
+            }
+
+            // return direction
+            return direction;
+        }
+
+        private int MiddleTimeFramePivot()
+        {
+            if (Pama2[0] == Pama2[1]) return 0;
+
+            // newest at index [0]
+            Pama2List.Insert(0, Pama2[0]);
+
+            int direction = 0;
+
+            if (Pama2List.Count == 3)
+            {
+                // Bottom [0] > [1] < [2] 
+                if (Pama2List[0] > Pama2List[1] && Pama2List[1] < Pama2List[2])
+                    direction = 1;
+
+                // Peak [0] < [1] > [2] 
+                else if (Pama2List[0] < Pama2List[1] && Pama2List[1] > Pama2List[2])
+                    direction = -1;
+
+                // remove oldest from list [2]
+                Pama2List.RemoveAt(2);
+            }
+
+            // return direction
+            return direction;
+        }
+
+        private int ShortTimeFramePivot()
+        {
+            if (Pama1[0] == Pama1[1]) return 0;
+
+            // newest at index [0]
+            Pama1List.Insert(0, Pama1[0]);
+
+            int direction = 0;
+
+            if (Pama1List.Count == 3)
+            {
+                // Bottom [0] > [1] < [2] 
+                if (Pama1List[0] > Pama1List[1] && Pama1List[1] < Pama1List[2])
+                    direction = 1;
+
+                // Peak [0] < [1] > [2] 
+                else if (Pama1List[0] < Pama1List[1] && Pama1List[1] > Pama1List[2])
+                    direction = -1;
+
+                // remove oldest from list [2]
+                Pama1List.RemoveAt(2);
+            }
+
+            // return direction
+            return direction;
         }
 
         #region Print Functions
@@ -147,37 +217,6 @@ namespace PowerLanguage.Strategy
         #endregion
     }
 }
-
-namespace PowerLanguage.Function
-{
-    public sealed class TestFunction : FunctionSimple<bool>
-    {
-        // test this first, then test autoproperties
-        public VariableSeries<double> ClosePrice { get; private set; }
-        public TestFunction(CStudyControl m):base(m)
-        {
-
-        }
-
-        protected override void Create()
-        {
-            ClosePrice = new VariableSeries<double>(this);
-        }
-
-        protected override void StartCalc()
-        {
-        }
-
-        protected override bool CalcBar()
-        {
-            ClosePrice.Value = Bars.CloseValue;
-            return false;
-        }
-    }
-
-}
-
-
 
 // once strategy is completed. integrate back to FuncLib
 namespace PowerLanguage.Function
@@ -214,9 +253,9 @@ namespace PowerLanguage.Function
         public int _Timeframes { get { return Timeframes; } }
 
         // return values
-        public VariableSeries<double> _Pama_1 { get { return Pama1; }  }
-        public VariableSeries<double> _Pama_2 { get { return Pama2; }  }
-        public VariableSeries<double> _Pama_3 { get { return Pama3; }  }
+        public VariableSeries<double> Pama1 { get; private set; }
+        public VariableSeries<double> Pama2 { get; private set; }
+        public VariableSeries<double> Pama3 { get; private set; }
 
         // return std dev
         public List<VariableSeries<double>> Pama_StdDev { get { return ListOfStdDevsValues; } }
@@ -238,7 +277,6 @@ namespace PowerLanguage.Function
         private double Alpha, Gain;
 
         private int[] BarCount, IsTimeFrameSelected;
-        private VariableSeries<double> Pama1, Pama2, Pama3;
         private List<VariableSeries<double>> ListOfPamaValues, ListOfHmaValues;
         private List<HullMovingAverage> ListOfHmas;
         private List<VariableSeries<bool>> ListOfClosingTicks;
@@ -250,11 +288,6 @@ namespace PowerLanguage.Function
 
         protected override void Create()
         {
-            // return pama values
-            Pama1 = new VariableSeries<double>(this);
-            Pama2 = new VariableSeries<double>(this);
-            Pama3 = new VariableSeries<double>(this);
-
             ListOfPamaValues = new List<VariableSeries<double>>();
             ListOfClosingTicks = new List<VariableSeries<bool>>();
             ListOfHmas = new List<HullMovingAverage>();

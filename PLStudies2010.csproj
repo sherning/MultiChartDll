@@ -84,6 +84,7 @@
     <Compile Include="__SherNing_PamaMTF_StdDev.Indicator.CS" />
     <Compile Include="__SherNing_PamaMTF_Funnel.Indicator.CS" />
     <Compile Include="__SherNing_PamaMTF_Spread.Indicator.CS" />
+    <Compile Include="__SherNing_RelativeMomentum.Indicator.CS" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>
