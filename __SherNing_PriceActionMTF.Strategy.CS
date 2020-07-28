@@ -27,13 +27,10 @@ namespace PowerLanguage.Strategy
      *  ----------------------------------- Version History -----------------------------------
      
 
-     *  ---------------------------------------- Notes ----------------------------------------
-     *  - 3 timeframes
-     *  - Highest Timeframe determines market direction
-     *  - Decide which timeframe to trade.
-     *  - Strategy call create -> function call create -> in sync
+     *  ------------------------------------ Project Notes ------------------------------------
+     *  - Long, Low > PAL 240
      *  
-     *  ---------------------------------------- Notes ----------------------------------------
+     *  ------------------------------------ Project Notes ------------------------------------
      */
     public class __SherNing_PriceActionMTF : SignalObject //v10
     {

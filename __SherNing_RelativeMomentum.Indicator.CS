@@ -24,6 +24,7 @@ namespace PowerLanguage.Indicator
         /* ------------------------------- Version 1.0.0 -------------------------------
          * 
          */
+
         [Input] public int NumOfDataSeries { get; set; }
         [Input] public int CountDays { get; set; }
 
