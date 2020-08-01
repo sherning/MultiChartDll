@@ -39,7 +39,8 @@ namespace PowerLanguage.Indicator
          *  - Or we can use the std dev of the fractal line
          *  
          *  - How do we determine the fractal line ?
-         *  - Use a variable to track the trend direction
+         *  - Fc One completed
+         *  - Fc Two
          *  
          *  ------------------------------------ Project Notes ------------------------------------
          */
@@ -52,25 +53,29 @@ namespace PowerLanguage.Indicator
         [Input] public bool DisplayPama1 { get; set; }
         [Input] public bool DisplayPama1_StdDev1 { get; set; }
         [Input] public bool DisplayPama1_StdDev2 { get; set; }
+        [Input] public bool DisplayPama1_StdDev3 { get; set; }
         [Input] public bool DisplayFractal1 { get; set; }
         [Input] public bool DisplayPama2 { get; set; }
         [Input] public bool DisplayPama2_StdDev1 { get; set; }
         [Input] public bool DisplayPama2_StdDev2 { get; set; }
+        [Input] public bool DisplayPama2_StdDev3 { get; set; }
+        [Input] public bool DisplayFractal2 { get; set; }
         [Input] public bool DisplayPama3 { get; set; }
         [Input] public bool DisplayPama3_StdDev1 { get; set; }
         [Input] public bool DisplayPama3_StdDev2 { get; set; }
+        [Input] public bool DisplayPama3_StdDev3 { get; set; }
 
 
         public __SherNing_TrendCatcher(object _ctx) : base(_ctx)
         {
             IndicatorSettings = "Indicator Settings";
-            FractalLength = 10;
+            FractalLength = 6;
             StdDevLength = 6;
 
             DisplaySettings = "Display Settings";
             DisplayPama1 = true;
             DisplayPama2 = true;
-            DisplayPama3 = true;
+            DisplayPama3 = false;
 
             DisplayPama1_StdDev1 = false;
             DisplayPama2_StdDev1 = false;
@@ -80,12 +85,17 @@ namespace PowerLanguage.Indicator
             DisplayPama2_StdDev2 = false;
             DisplayPama3_StdDev2 = false;
 
+            DisplayPama1_StdDev3 = false;
+            DisplayPama2_StdDev3 = false;
+            DisplayPama3_StdDev3 = false;
+
             DisplayFractal1 = true;
+            DisplayFractal2 = false;
         }
 
         // private fields
         const int NumOfPamaPlots = 3;
-        const int NumOfStdDevPlots = 12;
+        const int NumOfStdDevPlots = 18;
 
         // main function
         TrendCatcherFunction TrendCatcher;
@@ -98,16 +108,27 @@ namespace PowerLanguage.Indicator
         VariableSeries<Color> Pama1Color, Pama2Color, Pama3Color;
 
         // fractal channel, variableseries remembers the state base on bar interval
-        VariableSeries<Fractal> FractalOne;
-        IPlotObject PlotFractalTop, PlotFractalBottom;
+        IPlotObject PlotFc1Top, PlotFc1Bottom;
+        IPlotObject PlotFc2Top, PlotFc2Bottom;
+        VariableSeries<double> Fc1Top, Fc1Bottom;
+        VariableSeries<double> Fc2Top, Fc2Bottom;
+        VariableSeries<int> Fc1Direction, Fc2Direction;
+        double Fc1TrackPama, Fc2TrackPama;
 
         protected override void Create()
         {
             // trend catcher
             TrendCatcher = new TrendCatcherFunction(this);
 
-            // fractal
-            FractalOne = new VariableSeries<Fractal>(this);
+            // fractal 1
+            Fc1Top = new VariableSeries<double>(this);
+            Fc1Bottom = new VariableSeries<double>(this);
+            Fc1Direction = new VariableSeries<int>(this);
+
+            // fractal 2
+            Fc2Top = new VariableSeries<double>(this);
+            Fc2Bottom = new VariableSeries<double>(this);
+            Fc2Direction = new VariableSeries<int>(this);
 
             // list
             ListOfPamaPlots = new List<IPlotObject>();
@@ -134,14 +155,9 @@ namespace PowerLanguage.Indicator
             {
                 // each is plot object data stored on the heap
                 ListOfPamaPlots.Add(AddPlot(new PlotAttributes(
-                    pamaNames[i],
-                    EPlotShapes.Line,
-                    Color.White,
-                    Color.Black,
-                    pamaWidths[i],
-                    EPlotStyle.Solid,
-                    true
-                    )));
+                    pamaNames[i], EPlotShapes.Line,
+                    Color.White, Color.Black,
+                    pamaWidths[i], EPlotStyle.Solid, true)));
             }
 
             string[] stdDevNames = new[]
@@ -150,14 +166,22 @@ namespace PowerLanguage.Indicator
                 "Pama1 1st StdDev Lower",
                 "Pama1 2nd StdDev Upper",
                 "Pama1 2nd StdDev Lower",
+                "Pama1 3rd StdDev Lower",
+                "Pama1 3rd StdDev Lower",
+
                 "Pama2 1st StdDev Upper",
                 "Pama2 1st StdDev Lower",
                 "Pama2 2nd StdDev Upper",
                 "Pama2 2nd StdDev Lower",
+                "Pama2 3rd StdDev Lower",
+                "Pama2 3rd StdDev Lower",
+
                 "Pama3 1st StdDev Upper",
                 "Pama3 1st StdDev Lower",
                 "Pama3 2nd StdDev Upper",
                 "Pama3 2nd StdDev Lower",
+                "Pama3 3rd StdDev Lower",
+                "Pama3 3rd StdDev Lower",
             };
 
             EPlotStyle[] stdDevStyle = new[]
@@ -166,10 +190,16 @@ namespace PowerLanguage.Indicator
                 EPlotStyle.Dash,
                 EPlotStyle.Dash,
                 EPlotStyle.Dash,
+                EPlotStyle.Dash,
+                EPlotStyle.Dash,
                 EPlotStyle.DashDot,
                 EPlotStyle.DashDot,
                 EPlotStyle.DashDot,
                 EPlotStyle.DashDot,
+                EPlotStyle.DashDot,
+                EPlotStyle.DashDot,
+                EPlotStyle.Dot,
+                EPlotStyle.Dot,
                 EPlotStyle.Dot,
                 EPlotStyle.Dot,
                 EPlotStyle.Dot,
@@ -179,37 +209,34 @@ namespace PowerLanguage.Indicator
             for (int i = 0; i < NumOfStdDevPlots; i++)
             {
                 ListOfPamaStdDevPlots.Add(AddPlot(new PlotAttributes(
-                    stdDevNames[i],
-                    EPlotShapes.Line,
-                    Color.White,
-                    Color.Black,
-                    1,
-                    stdDevStyle[i],
-                    true
-                    )));
+                    stdDevNames[i], EPlotShapes.Line,
+                    Color.White, Color.Black,
+                    1, stdDevStyle[i], true)));
             }
 
             // fractal 1 upper line
-            PlotFractalTop = AddPlot(new PlotAttributes(
-                "Fractal 1 Top",
-                EPlotShapes.Point,
-                Color.Transparent,
-                Color.Transparent,
-                7,
-                EPlotStyle.Solid,
-                true
-                ));
+            PlotFc1Top = AddPlot(new PlotAttributes(
+                "Fractal 1: Top", EPlotShapes.Point,
+                Color.Transparent, Color.Transparent,
+                5, EPlotStyle.Solid, true));
 
             // fractal 1 lower line
-            PlotFractalBottom = AddPlot(new PlotAttributes(
-               "Fractal 1 Bottom",
-               EPlotShapes.Point,
-               Color.Transparent,
-               Color.Transparent,
-               7,
-               EPlotStyle.Solid,
-               true
-               ));
+            PlotFc1Bottom = AddPlot(new PlotAttributes(
+               "Fractal 1: Bottom", EPlotShapes.Point,
+               Color.Transparent, Color.Transparent,
+               5, EPlotStyle.Solid, true));
+
+            // fractal 2 upper line
+            PlotFc2Top = AddPlot(new PlotAttributes(
+                "Fractal 2: Top", EPlotShapes.Line,
+                Color.Transparent, Color.Transparent,
+                3, EPlotStyle.Solid, true));
+
+            // fractal 2 lower line
+            PlotFc2Bottom = AddPlot(new PlotAttributes(
+               "Fractal 2: Bottom", EPlotShapes.Line,
+               Color.Transparent, Color.Transparent,
+               3, EPlotStyle.Solid, true));
 
             // skip index[0] when using
             for (int i = 0; i < 4; i++)
@@ -221,6 +248,8 @@ namespace PowerLanguage.Indicator
             // num of std dev plots
             for (int i = 0; i < NumOfStdDevPlots; i++)
                 StdDevChannel.Add(new VariableSeries<double>(this));
+
+            Output.Clear();
         }
         protected override void StartCalc()
         {
@@ -228,6 +257,8 @@ namespace PowerLanguage.Indicator
             TrendCatcher._Smooth = 10;
             TrendCatcher._StdDevLength = StdDevLength;
             TrendCatcher._PriceType = 1;
+
+            Fc1TrackPama = Fc2TrackPama = 0;
         }
         protected override void CalcBar()
         {
@@ -256,164 +287,244 @@ namespace PowerLanguage.Indicator
                 Pama3DistinctValues();
 
                 // check for null exception error 
-                //CalcFractalChannel();
+                CalcFractalChannel1();
+                CalcFractalChannel2();
+                CurrentInsideBar();
 
                 // set plot values on chart
                 PlotPamaValues();
-               // PlotFractalChannel();
+                PlotFractalChannel();
             }
         }
 
         #region Indicator Logic
-        private void CalcFractalChannel()
+        // combine price action with pama logic
+        private void CurrentInsideBar()
+        {
+            double prevHigh = Bars.High[1];
+            double currHigh = Bars.High[0];
+            double prevLow = Bars.Low[1];
+            double currLow = Bars.Low[0];
+            bool insideBar = false;
+            bool greenBar = Bars.Close[0] > Bars.Open[0];
+            bool pamaPivot = false;
+
+            // current bar is an inside bar
+            if (currHigh < prevHigh && currLow > prevLow)
+                insideBar = true;
+
+            // if pama pivot 
+            if (Pama[1][0] > Pama[1][1] && Pama[1][1] < Pama[1][2])
+                pamaPivot = true;
+            else if (Pama[1][0] < Pama[1][1] && Pama[1][1] > Pama[1][2])
+                pamaPivot = true;
+
+            // if current bar is an inside bar
+            if (insideBar && pamaPivot)
+            {
+                IArrowObject arrow;
+
+                // chart point requires a time and price
+                ChartPoint arrowPt;
+                string message = "Inside Bar";
+                Color color;
+
+                if (greenBar)
+                {
+                    arrowPt = new ChartPoint(Bars.Time[0], Bars.Low[0]);
+                    arrow = DrwArrow.Create(arrowPt, false);
+                    color = Color.Cyan;
+                }
+                else
+                {
+                    arrowPt = new ChartPoint(Bars.Time[0], Bars.High[0]);
+                    arrow = DrwArrow.Create(arrowPt, true);
+                    color = Color.Magenta;
+                }
+
+                arrow.TextBGColor = Color.White;
+                arrow.Color = color;
+                arrow.Text = message;
+            }
+        }
+
+        private void CalcFractalChannel1()
         {
             double close = Bars.CloseValue;
             double pamaValue = Pama[1][0];
 
-            // start of indicator calculation
-            if (FractalOne[0].Direction == 0)
+            Fc1Top.Value = CalcPivotHigh();
+            Fc1Bottom.Value = CalcPivotLow();
+
+            // uptrend start, close > prev top
+            if (close > Fc1Top[1])
             {
-                FractalOne[0].Top = CalcPivotHigh();
-                FractalOne[0].Bottom = CalcPivotLow();
+                Fc1Direction.Value = 1;
             }
 
-            // current bar close above top line, start of uptrend
-            if (close > FractalOne[0].Top)
+            // downtrend start, cl0se < prev bottom
+            else if (close < Fc1Bottom[1])
             {
-                // put all the first bar logic here
-                double startValue = CalcPivotLow();
-
-                // update fractal properties
-                FractalOne[0].Direction = 1;
-                FractalOne[0].Bottom = startValue;
-                FractalOne[0].StartingValue = startValue;
-                FractalOne[0].StartingPamaValue = pamaValue;
-                FractalOne[0].IsPrevBarStart = true;
-
-                // nothing else to update
-                return;
+                Fc1Direction.Value = -1;
             }
 
-            // current bar close below bottom line, start of downtrend
-            else if (close < FractalOne[0].Bottom)
+            // uptrend
+            if (Fc1Direction[0] == 1)
             {
-                // put all the first bar logic here
-                double startValue = CalcPivotHigh();
+                double value = 0;
 
-                // update fractal properties
-                FractalOne[0].Direction = -1;
-                FractalOne[0].Top = startValue;
-                FractalOne[0].StartingValue = startValue;
-                FractalOne[0].StartingPamaValue = pamaValue;
-                FractalOne[0].IsPrevBarStart = true;
-
-                return;
-            }
-
-            // uptrend, 2nd bar onwards
-            if (FractalOne[0].Direction == 1)
-            {
-                double pama = 0;
-
-                // logic for 2nd bar of trend
-                if (FractalOne[0].IsPrevBarStart)
+                // start of new trend
+                if (Fc1Direction[1] == -1)
                 {
-                    double pamaStart = FractalOne[0].StartingPamaValue;
-
-                    // use start value instead of current value
-                    if (pamaValue > pamaStart)
-                    {
-                        // difference btw current and prev pama value
-                        pama = pamaStart - pamaValue;
-                    }
-
-                    // update current to new pama value
-                    FractalOne[0].PamaValue = Math.Max(pamaStart, pamaValue);
-
-                    // update bottom line, non retracing logic
-                    FractalOne[0].Bottom = pamaStart + pama;
-
-                    // not the first bar of the new trend any more
-                    FractalOne[0].IsPrevBarStart = false;
+                    Fc1TrackPama = pamaValue;
+                    value = Fc1Bottom[0];
                 }
 
-                // logic for 3rd bar onwards
+                // continuation of existing trend
                 else
                 {
-                    // prev stored pama value
-                    double pamaStart = FractalOne[0].PamaValue;
-
-                    // use start value instead of current value
-                    if (pamaValue > pamaStart)
+                    // pama above high water mark
+                    if (pamaValue > Fc1TrackPama)
                     {
-                        // difference btw current and prev pama value
-                        pama = pamaStart - pamaValue;
+                        // logic for moving fractal
+                        if (Bars.CurrentBar < 100)
+                        {
+                            value = ((pamaValue - Fc1TrackPama) * 1) + Fc1Bottom[1];
+                        }
+                        else
+                        {
+                            // use a factor to adjust the movement speed
+                            value = ((pamaValue - Fc1TrackPama) * 0.75) + Fc1Bottom[1];
+                        }
+
+                        // track pama 
+                        Fc1TrackPama = pamaValue;
                     }
-
-                    // update current to new pama value
-                    FractalOne[0].PamaValue = Math.Max(pamaStart, pamaValue);
-
-                    // update bottom line
-                    FractalOne[0].Bottom = pamaStart + pama;
                 }
 
-                // update the top
-                FractalOne[0].Top = Math.Max(FractalOne[0].Top, Bars.HighValue);
-
-                return;
+                // non- retracing
+                Fc1Bottom.Value = Math.Max(Fc1Bottom[1], value);
             }
 
-            // downtrend logic, 2nd bar onwards
-            else if (FractalOne[0].Direction == -1)
+            // downtrend
+            else if (Fc1Direction[0] == -1)
             {
-                double pama = 0;
+                double value;
 
-                // logic for 2nd bar of trend
-                if (FractalOne[0].IsPrevBarStart)
+                // start of new trend
+                if (Fc1Direction[1] == 1)
                 {
-                    double pamaStart = FractalOne[0].StartingPamaValue;
-
-                    // use start value instead of current value
-                    if (pamaValue < pamaStart)
-                    {
-                        // difference btw current and prev pama value
-                        pama = Math.Abs(pamaStart - pamaValue);
-                    }
-
-                    // update current to new pama value
-                    FractalOne[0].PamaValue = Math.Min(pamaStart, pamaValue);
-
-                    // update bottom line, non retracing logic
-                    FractalOne[0].Top = pamaStart - pama;
-
-                    // not the first bar of the new trend any more
-                    FractalOne[0].IsPrevBarStart = false;
+                    Fc1TrackPama = pamaValue;
+                    value = Fc1Top[0];
                 }
 
-                // logic for 3rd bar onwards
+                // continuation of existing trend
                 else
                 {
-                    // prev stored pama value
-                    double pamaStart = FractalOne[0].PamaValue;
-
-                    // use start value instead of current value
-                    if (pamaValue < pamaStart)
+                    // pama below low water mark
+                    if (pamaValue < Fc1TrackPama)
                     {
-                        // difference btw current and prev pama value
-                        pama = Math.Abs(pamaStart - pamaValue);
+                        if (Bars.CurrentBar < 100)
+                        {
+                            value = Fc1Top[1] - ((Fc1TrackPama - pamaValue) * 1);
+                        }
+                        else
+                        {
+                            value = Fc1Top[1] - ((Fc1TrackPama - pamaValue) * 0.75);
+                        }
+                        Fc1TrackPama = pamaValue;
                     }
-
-                    // update current to new pama value
-                    FractalOne[0].PamaValue = Math.Min(pamaStart, pamaValue);
-
-                    // update bottom line
-                    FractalOne[0].Top = pamaStart - pama;
+                    else
+                    {
+                        value = double.MaxValue;
+                    }
                 }
 
-                // update the bottom
-                FractalOne[0].Bottom = Math.Min(FractalOne[0].Bottom, Bars.LowValue);
+                // non- retracing
+                Fc1Top.Value = Math.Min(Fc1Top[1], value);
+            }
+        }
 
-                return;
+        private void CalcFractalChannel2()
+        {
+            double close = Bars.CloseValue;
+            double pamaValue = Pama[2][0];
+
+            // use MTF high or bar high ?
+            Fc2Top.Value = CalcPivotHigh();
+            Fc2Bottom.Value = CalcPivotLow();
+
+            // uptrend start, close > prev top
+            if (close > Fc2Top[1])
+            {
+                Fc2Direction.Value = 1;
+            }
+
+            // downtrend start, cl0se < prev bottom
+            else if (close < Fc2Bottom[1])
+            {
+                Fc2Direction.Value = -1;
+            }
+
+            // uptrend
+            if (Fc2Direction[0] == 1)
+            {
+                double value = 0;
+
+                // start of new trend
+                if (Fc2Direction[1] == -1)
+                {
+                    Fc2TrackPama = pamaValue;
+                    value = Fc2Bottom[0];
+                }
+
+                // continuation of existing trend
+                else
+                {
+                    // pama above high water mark
+                    if (pamaValue > Fc2TrackPama)
+                    {
+                        // logic for moving fractal
+                        value = (pamaValue - Fc2TrackPama) + Fc2Bottom[1];
+
+                        // track pama 
+                        Fc2TrackPama = pamaValue;
+                    }
+                }
+
+                // non- retracing
+                Fc2Bottom.Value = Math.Max(Fc2Bottom[1], value);
+            }
+
+            // downtrend
+            else if (Fc2Direction[0] == -1)
+            {
+                double value;
+
+                // start of new trend
+                if (Fc2Direction[1] == 1)
+                {
+                    Fc2TrackPama = pamaValue;
+                    value = Fc2Top[0];
+                }
+
+                // continuation of existing trend
+                else
+                {
+                    // pama below low water mark
+                    if (pamaValue < Fc2TrackPama)
+                    {
+                        value = Fc2Top[1] - (Fc2TrackPama - pamaValue);
+                        Fc2TrackPama = pamaValue;
+                    }
+                    else
+                    {
+                        value = double.MaxValue;
+                    }
+                }
+
+                // non- retracing
+                Fc2Top.Value = Math.Min(Fc2Top[1], value);
             }
         }
 
@@ -514,14 +625,24 @@ namespace PowerLanguage.Indicator
         }
         private void PlotFractalChannel()
         {
-            if (FractalOne[0].Direction == 1)
+            if (Fc1Direction[0] == 1 && DisplayFractal1)
             {
-                PlotFractalBottom.Set(FractalOne[0].Bottom);
+                PlotFc1Bottom.Set(Fc1Bottom[0], Color.Cyan);
+            }
+            else if (Fc1Direction[0] == -1 && DisplayFractal1)
+            {
+                PlotFc1Top.Set(Fc1Top[0], Color.Magenta);
             }
 
-            else if (FractalOne[0].Direction == -1)
+            if (Fc2Direction[0] == 1 && DisplayFractal2)
             {
-                PlotFractalTop.Set(FractalOne[0].Top);
+                PlotFc2Bottom.Set(Fc2Bottom[0], Color.DarkCyan);
+                PlotFc2Top.Set(Fc2Top[0], Color.Black);
+            }
+            else if (Fc2Direction[0] == -1 && DisplayFractal2)
+            {
+                PlotFc2Top.Set(Fc2Top[0], Color.DarkMagenta);
+                PlotFc2Bottom.Set(Fc2Bottom[0], Color.Black);
             }
         }
         private void PlotPamaValues()
@@ -550,70 +671,54 @@ namespace PowerLanguage.Indicator
                 ListOfPamaStdDevPlots[3].Set(Pama[1].Value - 2 * PamaStdDev[1].Value, Darken(Pama1Color[0]));
             }
 
+            // display pama1 3rd std dev
+            if (DisplayPama1 && DisplayPama1_StdDev3)
+            {
+                ListOfPamaStdDevPlots[4].Set(Pama[1].Value + 3 * PamaStdDev[1].Value, Darken(Pama1Color[0]));
+                ListOfPamaStdDevPlots[5].Set(Pama[1].Value - 3 * PamaStdDev[1].Value, Darken(Pama1Color[0]));
+            }
+
             // display pama2 1st std dev
             if (DisplayPama2 && DisplayPama2_StdDev1)
             {
-                ListOfPamaStdDevPlots[4].Set(Pama[2].Value + PamaStdDev[2].Value, Darken(Pama2Color[0]));
-                ListOfPamaStdDevPlots[5].Set(Pama[2].Value - PamaStdDev[2].Value, Darken(Pama2Color[0]));
+                ListOfPamaStdDevPlots[6].Set(Pama[2].Value + PamaStdDev[2].Value, Darken(Pama2Color[0]));
+                ListOfPamaStdDevPlots[7].Set(Pama[2].Value - PamaStdDev[2].Value, Darken(Pama2Color[0]));
             }
 
             // display pama2 2nd std dev
             if (DisplayPama2 && DisplayPama2_StdDev2)
             {
-                ListOfPamaStdDevPlots[6].Set(Pama[2].Value + 2 * PamaStdDev[2].Value, Darken(Pama2Color[0]));
-                ListOfPamaStdDevPlots[7].Set(Pama[2].Value - 2 * PamaStdDev[2].Value, Darken(Pama2Color[0]));
+                ListOfPamaStdDevPlots[8].Set(Pama[2].Value + 2 * PamaStdDev[2].Value, Darken(Pama2Color[0]));
+                ListOfPamaStdDevPlots[9].Set(Pama[2].Value - 2 * PamaStdDev[2].Value, Darken(Pama2Color[0]));
+            }
+
+            // display pama2 3rd std dev
+            if (DisplayPama2 && DisplayPama2_StdDev3)
+            {
+                ListOfPamaStdDevPlots[10].Set(Pama[2].Value + 3 * PamaStdDev[2].Value, Darken(Pama2Color[0]));
+                ListOfPamaStdDevPlots[11].Set(Pama[2].Value - 3 * PamaStdDev[2].Value, Darken(Pama2Color[0]));
             }
 
             // display pama3 1st std dev
             if (DisplayPama3 && DisplayPama3_StdDev1)
             {
-                ListOfPamaStdDevPlots[8].Set(Pama[3].Value + PamaStdDev[3].Value, Darken(Pama3Color[0]));
-                ListOfPamaStdDevPlots[9].Set(Pama[3].Value - PamaStdDev[3].Value, Darken(Pama3Color[0]));
+                ListOfPamaStdDevPlots[12].Set(Pama[3].Value + PamaStdDev[3].Value, Darken(Pama3Color[0]));
+                ListOfPamaStdDevPlots[13].Set(Pama[3].Value - PamaStdDev[3].Value, Darken(Pama3Color[0]));
             }
 
             // display pama3 2nd std dev
             if (DisplayPama3 && DisplayPama3_StdDev2)
             {
-                ListOfPamaStdDevPlots[10].Set(Pama[3].Value + 2 * PamaStdDev[3].Value, Darken(Pama3Color[0]));
-                ListOfPamaStdDevPlots[11].Set(Pama[3].Value - 2 * PamaStdDev[3].Value, Darken(Pama3Color[0]));
+                ListOfPamaStdDevPlots[14].Set(Pama[3].Value + 2 * PamaStdDev[3].Value, Darken(Pama3Color[0]));
+                ListOfPamaStdDevPlots[15].Set(Pama[3].Value - 2 * PamaStdDev[3].Value, Darken(Pama3Color[0]));
             }
-        }
 
-        #endregion
-
-        #region Fractal Class
-        class Fractal
-        {
-            // Fractal Channel Container Class
-
-            /// <summary>
-            /// Is previous bar the start of a new trend ?
-            /// </summary>
-            public bool IsPrevBarStart { get; set; }
-            /// <summary>
-            /// Starting value of new trend
-            /// </summary>
-            public double StartingValue { get; set; }
-            /// <summary>
-            /// Upper fractal value
-            /// </summary>
-            public double Top { get; set; }
-            /// <summary>
-            /// Lower fractal value
-            /// </summary>
-            public double Bottom { get; set; }
-            /// <summary>
-            /// 0: Flat, 1: Long, -1: Short
-            /// </summary>
-            public int Direction { get; set; }
-            /// <summary>
-            /// Current pama value
-            /// </summary>
-            public double PamaValue { get; set; }
-            /// <summary>
-            /// Starting pama value
-            /// </summary>
-            public double StartingPamaValue { get; set; }
+            // display pama3 3rd std dev
+            if (DisplayPama3 && DisplayPama3_StdDev3)
+            {
+                ListOfPamaStdDevPlots[16].Set(Pama[3].Value + 3 * PamaStdDev[3].Value, Darken(Pama3Color[0]));
+                ListOfPamaStdDevPlots[17].Set(Pama[3].Value - 3 * PamaStdDev[3].Value, Darken(Pama3Color[0]));
+            }
         }
 
         #endregion

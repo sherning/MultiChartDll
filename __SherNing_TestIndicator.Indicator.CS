@@ -42,11 +42,11 @@ namespace PowerLanguage.Indicator
 
         protected override void StartCalc()
         {
+
         }
 
         protected override void CalcBar()
         {
-           
         }
 
         protected override void StopCalc()
