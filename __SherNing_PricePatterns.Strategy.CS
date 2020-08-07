@@ -8,11 +8,12 @@ using System.Collections.Generic;
 
 namespace PowerLanguage.Strategy
 {
+    [IOGMode(IOGMode.Enabled)]
     public class __SherNing_PricePatterns : SignalObject
     {
         //==========================================================================================
         // Name           : __SherNing_PricePatterns
-        // Description    : Price Action Patterns Strategy
+        // Description    : Price Action Patterns Framework
         // Version        : v1.0
         // Date Created   : 01 - Aug - 2020
         // Time Taken     : 
@@ -27,66 +28,87 @@ namespace PowerLanguage.Strategy
          *  ----------------------------------- Version History -----------------------------------
          *  
          *  ------------------------------------ Project Notes ------------------------------------
-         *  - Default Profit target of 3 X risk reward
-         *  - Default Stop Loss
+         *  - Framework for testing price patterns
+         *  - How to track stop and profit target orders, with IOG or without IOG
+         *  - for all MC function, use initializer
+         *  - IOG mode for non-market orders
+         *  - Test with Function
          *  ------------------------------------ Project Notes ------------------------------------
          */
-
+        [Input] public string StrategySettings { get; set; }
+        [Input] public string DisplaySettings { get; set; }
+        [Input] public bool ShowOrderLines { get; set; }
         public __SherNing_PricePatterns(object _ctx) : base(_ctx)
-        { }
+        {
+            StrategySettings = "Strategy Settings";
+            DisplaySettings = "Display Settings";
+            ShowOrderLines = true;
+        }
 
         // reference fields 
         PricePatternStrategy PricePattern;
         VariableSeries<double> Pama1, Pama2, Pama3;
-        IOrderMarket BuyMkt, ShortMkt;
-        IOrderPriced SellStop, CoverStop;
-        IOrderPriced SellLmt, CoverLmt;
+        VariableSeries<int> MarketPosition;
+        VariableSeries<EMarketPositionSide> PosSide;
+        IOrderMarket LeMkt, SeMkt;
+        IOrderPriced LeStp, SeStp;
+        IOrderPriced LePft, SePft;
 
         protected override void Create()
         {
             PricePattern = new PricePatternStrategy(this);
 
             // entry
-            BuyMkt = OrderCreator.MarketNextBar(new SOrderParameters(
+            LeMkt = OrderCreator.MarketNextBar(new SOrderParameters(
                 Contracts.UserSpecified, "LE_Mkt", EOrderAction.Buy));
 
-            ShortMkt = OrderCreator.MarketNextBar(new SOrderParameters(
+            SeMkt = OrderCreator.MarketNextBar(new SOrderParameters(
                 Contracts.UserSpecified, "SE_Mkt", EOrderAction.SellShort));
 
             // stop loss 
-            SellStop = OrderCreator.Stop(new SOrderParameters(
+            LeStp = OrderCreator.Stop(new SOrderParameters(
                 Contracts.Default, "LX_Stp", EOrderAction.Sell));
 
-            CoverStop = OrderCreator.Stop(new SOrderParameters(
+            SeStp = OrderCreator.Stop(new SOrderParameters(
                 Contracts.Default, "SX_Stp", EOrderAction.BuyToCover));
 
             // profit exit
-            SellLmt = OrderCreator.Limit(new SOrderParameters(
+            LePft = OrderCreator.Limit(new SOrderParameters(
                 Contracts.Default, "LX_$$", EOrderAction.Sell));
 
-            CoverLmt = OrderCreator.Limit(new SOrderParameters(
+            SePft = OrderCreator.Limit(new SOrderParameters(
                 Contracts.Default, "SX_$$", EOrderAction.BuyToCover));
+
+            MarketPosition = new VariableSeries<int>(this);
+            PosSide = new VariableSeries<EMarketPositionSide>(this);
 
             // clear output window
             Output.Clear();
         }
 
-        // value fields
-        bool LeEntry, SeEntry, LxStop, SxStop, LxPft, SxPft;
-        double LeEntryPrice, SeEntryPrice, LxStopPrice, SxStopPrice, LxPftPrice, SxPftPrice;
-
+        // fields 
+        bool LeActive;
+        double LeStpPrice, LePftPrice;
         protected override void StartCalc()
         {
             PricePattern._Length = 6;
             PricePattern._Smooth = 10;
 
-            // reset 
-            LeEntry = SeEntry = LxStop = SxStop = LxPft = SxPft = false;
+            LeClear();
+        }
+        private void LeClear()
+        {
+            LeActive = false;
+            LeStpPrice = LePftPrice = 0;
         }
         protected override void CalcBar()
         {
             // call strategy function
             PricePattern.Call();
+
+            // keep track of market position
+            MarketPosition.Value = StrategyInfo.MarketPosition;
+            PosSide.Value = CurrentPosition.Side;
 
             if (Bars.CurrentBar == 1)
             {
@@ -96,111 +118,109 @@ namespace PowerLanguage.Strategy
                 Pama3 = PricePattern.Pama3;
             }
 
-            // strategy conditions
-            CurrentInsideBar();
-
-            // order management
-            if (LeEntry && StrategyInfo.MarketPosition == 0)
-                BuyMkt.Send(100000);
-
-            if (SeEntry && StrategyInfo.MarketPosition == 0)
-                ShortMkt.Send(100000);
-
-            // risk management
-            bool longActive = StrategyInfo.MarketPosition > 0;
-            bool shortActive = StrategyInfo.MarketPosition < 0;
-
-            // entry is filled, and stop loss has not been calculated
-            if (!LxStop && longActive)
+            if (Bars.Status == EBarState.Close)
             {
-                LxStopPrice = Bars.Low[1];
-                LxStop = true;
+                LeEntry();
             }
 
-            if (!SxStop && shortActive)
-            {
-                SxStopPrice = Bars.High[1];
-                SxStop = true;
-            }
+            LeExit();
 
-            if (longActive && LxStop)
-                SellStop.Send(LxStopPrice);
-
-            if (shortActive && SxStop)
-                CoverStop.Send(SxStopPrice);
-
-
-            // profit target
-            double risk;
-
-            if (!LxPft && longActive)
-            {
-                risk = Bars.Close[0] - Bars.Low[1];
-                LxPftPrice = Bars.Close[0] + (3 * risk);
-                LxPft = true;
-            }
-
-            if (!SxPft && shortActive)
-            {
-                risk = Bars.High[1] - Bars.Close[0];
-                SxPftPrice = Bars.Close[0] - (3 * risk);
-                SxPft = true;
-            }
-
-            if (longActive && LxPft)
-                SellLmt.Send(LxPftPrice);
-
-            if (shortActive && SxPft)
-                CoverLmt.Send(SxPftPrice);
-
-            // reset
-            if (StrategyInfo.MarketPosition == 0)
-                LeEntry = SeEntry = LxStop = SxStop = LxPft = SxPft = false;
         }
 
-        /// <summary>
-        /// Strategy Condition - Inside bar
-        /// </summary>
-        /// <returns></returns>
-        private void CurrentInsideBar()
+        private void LeEntry()
         {
-            double prevHigh = Bars.High[1];
-            double currHigh = Bars.High[0];
-            double prevLow = Bars.Low[1];
-            double currLow = Bars.Low[0];
-            bool insideBar = false;
-            bool upPivot = false;
-            bool downPivot = false;
+            double close = Bars.Close[0];
 
-            // current bar is an inside bar
-            if (currHigh < prevHigh && currLow > prevLow)
-                insideBar = true;
-
-            // pivot condition [0] > [1] < [2]
-            if (Pama1[0] > Pama1[1] && Pama1[1] < Pama1[2])
-                upPivot = true;
-
-            // pivot condition [0] < [1] > [2]
-            if (Pama1[0] < Pama1[1] && Pama1[1] > Pama1[2])
-                downPivot = true;
-
-            // if current bar is an inside bar
-            if (insideBar)
+            // send Le Entry order once
+            if (TenBarHighBreak() && LeActive == false)
             {
-                if (upPivot)
-                {
-                    LeEntry = true;
-                    return;
-                }
+                LeMkt.Send(100000);
+                LeActive = true;
 
-                if (downPivot)
-                {
-                    SeEntry = true;
-                    return;
-                }
+                // calculate stop price
+                double stop = CalcLeStop();
+                LeStpPrice = stop;
+
+                // profit price = current price + (3 X Risk)
+                LePftPrice = close + (Math.Abs(close - stop) * 2);
             }
+        }
+        private void LeExit()
+        {
+            // if you use closing tick, the close is the closing tick.
+            double close = Bars.Close[0];
 
-            LeEntry = SeEntry = false;
+            // means intra bar close will not clear.
+            if (LeActive)
+            {
+                // send stop order
+                if (LeStpPrice > 0 && close > LeStpPrice)
+                {
+                    LeStp.Send(LeStpPrice);
+
+                    if (ShowOrderLines)
+                    {
+                        ChartPoint point = new ChartPoint(Bars.Time[0], LeStpPrice);
+                        ITextObject txt = DrwText.Create(point, "-");
+                        txt.Color = Color.Yellow;
+                    }
+                }
+                else LeClear();
+
+                if (LePftPrice > 0 && close < LePftPrice)
+                {
+                    LePft.Send(LePftPrice);
+
+                    if (ShowOrderLines)
+                    {
+                        ChartPoint point = new ChartPoint(Bars.Time[0], LePftPrice);
+                        ITextObject txt = DrwText.Create(point, "-");
+                        txt.Color = Color.Cyan;
+                    }
+                }
+                else LeClear();
+            }
+        }
+        private double CalcLeStop()
+        {
+            return LowestLow(10);
+        }
+        private bool TenBarHighBreak()
+        {
+            double high = 0;
+
+            // get the ten bar high value, exlude current high
+            for (int i = 1; i <= 10; i++)
+                high = Math.Max(high, Bars.High[i]);
+
+            // if current close > 10 bar high, return true
+            return Bars.Close[0] > high;
+        }
+        private double HighestHigh(int bars)
+        {
+            // bars has to be 1 or greater
+            if (bars <= 0) return 0;
+
+            double high = 0;
+
+            // get the ten bar high value, include current high
+            for (int i = 0; i < bars; i++)
+                high = Math.Max(high, Bars.High[i]);
+
+            return high;
+        }
+        private double LowestLow(int bars)
+        {
+            // bars has to be 1 or greater
+            if (bars <= 0) return 0;
+
+            double low = double.MaxValue;
+
+            // get the ten bar high value
+            for (int i = 0; i < bars; i++)
+                low = Math.Min(low, Bars.Low[i]);
+
+            return low;
         }
 
         #region Print Functions
@@ -220,12 +240,13 @@ namespace PowerLanguage.Strategy
                 message);
         }
         #endregion
-
     }
 }
 
 namespace PowerLanguage.Function
 {
+
+
     /// <summary>
     /// Function for Price pattern strategy
     /// </summary>
@@ -268,7 +289,7 @@ namespace PowerLanguage.Function
         // return pama pivots
         public List<VariableSeries<double>> Pama_Pivots { get { return ListOfMaPivotsValues; } }
 
-        public PricePatternStrategy (CStudyControl _master) : base(_master)
+        public PricePatternStrategy(CStudyControl _master) : base(_master)
         {
             // ------------------------ Timeframe Index Table ------------------------ //
             // 0 - 5min,   1 - 10min,  2 - 15min, 3 - 20min, 4 - 30min, 5 - 60min,     //
@@ -632,5 +653,4 @@ namespace PowerLanguage.Function
         #endregion
 
     }
-
 }

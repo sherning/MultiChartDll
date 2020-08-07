@@ -7313,6 +7313,234 @@ namespace PowerLanguage.Function
 
     #endregion
 
+    #region Order Info
+    public sealed class OrderInfo : FunctionSeries<bool>
+    {
+        //==========================================================================================
+        // Name           : Strategy Order Function
+        // Description    : Track strategy orders
+        // Version        : v1.0
+        // Date Created   : 04 - Aug - 2020
+        // Time Taken     : 
+        // Remarks        : Framework for tracking strategy orders
+        //==========================================================================================
+        // Copyright      : 2020, Sher Ning Technologies           
+        // License        :      
+        //==========================================================================================
+
+        /*  ----------------------------------- Version History -----------------------------------
+         *  
+         *  ----------------------------------- Version History -----------------------------------
+         *  
+         *  ------------------------------------ Project Notes ------------------------------------
+         *  - Function returns true if current position is open
+         *  - Function series will auto-call implicitly, without call() once every closing tick
+         *  - How to integrate strategy orders to function
+         *  - know exactly what happens when a trade is triggered.
+         *  ------------------------------------ Project Notes ------------------------------------
+         */
+
+        // properties - order type
+        public string EntryName { get; set; }
+        public EMarketPositionSide TradeDirection { get; set; }
+
+        // properties - price control
+        public double EntryPrice { get; set; }
+        public double StopLossPrice { get; set; }
+        public double ProfitPrice { get; set; }
+
+        // properties - risk control
+        public double RiskValue { get; set; }
+        public double RiskReward { get; set; }
+        public int Contracts { get; set; }
+
+        // properties - trade control
+        public bool Active { get; set; }
+        public VariableSeries<EMarketPositionSide> PosSide { get; set; }
+
+
+        // properties - display controls
+        public bool ShowStopLoss { get; set; }
+        public bool ShowProfitTarget { get; set; }
+
+        // constructor
+        public OrderInfo(CStudyControl m) : base(m) { }
+
+        // reference fields
+        protected override void Create()
+        {
+            PosSide = new VariableSeries<EMarketPositionSide>(this);
+        }
+
+        // value fields
+        double OnePip;
+        protected override void StartCalc()
+        {
+            OnePip = (Bars.Info.BigPointValue / Bars.Info.PriceScale) * 10;
+
+            // reset fields
+            ClearData();
+        }
+
+        public void ClearData()
+        {
+            // reset fields
+            Active = false;
+            StopLossPrice = ProfitPrice = 0;
+
+            Print("Active: " + Active);
+        }
+
+        protected override bool CalcBar()
+        {
+            bool state;
+
+            switch (TradeDirection)
+            {
+                // if direction is long
+                case EMarketPositionSide.Long:
+                    state = LeEntry();
+                    break;
+
+                // if direction is short
+                case EMarketPositionSide.Short:
+                    state = SeEntry();
+                    break;
+
+                // no direction given
+                default:
+                    state = false;
+                    break;
+            }
+
+            if (PosSide[1] != EMarketPositionSide.Flat && PosSide[0] == EMarketPositionSide.Flat)
+                ClearData();
+
+            return state;
+        }
+
+        #region Methods
+        private bool LeEntry()
+        {
+            double close = Bars.Close[0];
+            bool ret = false;
+
+            // trade is active. 
+            if (Active)
+            {
+                // only stop loss is used
+                if (StopLossPrice > 0 && close > StopLossPrice)
+                {
+                    ret = true;
+
+                    // display stop loss order
+                    if (ShowStopLoss)
+                    {
+                        ChartPoint point = new ChartPoint(Bars.Time[0], StopLossPrice);
+                        ITextObject text = DrwText.Create(point, "-");
+                        text.Color = Color.Yellow;
+                    }
+                }
+                else
+                {
+                    ClearData();
+                }
+
+                // only profit is used
+                if (ProfitPrice > 0 && close < ProfitPrice)
+                {
+                    ret = true;
+
+                    if (ShowProfitTarget)
+                    {
+                        ChartPoint point = new ChartPoint(Bars.Time[0], ProfitPrice);
+                        ITextObject text = DrwText.Create(point, "-");
+                        text.Color = Color.Cyan;
+                    }
+                }
+                else
+                {
+                    ClearData();
+                }
+            }
+
+            return ret;
+        }
+
+        private bool SeEntry()
+        {
+            double close = Bars.Close[0];
+            bool ret = false;
+
+            // trade is active. 
+            if (Active)
+            {
+                // only stop loss is used
+                if (StopLossPrice > 0 && close < StopLossPrice)
+                {
+                    ret = true;
+
+                    // display stop loss order
+                    if (ShowStopLoss)
+                    {
+                        ChartPoint point = new ChartPoint(Bars.Time[0], StopLossPrice);
+                        ITextObject text = DrwText.Create(point, "-");
+                        text.Color = Color.Yellow;
+                    }
+                }
+                else
+                {
+                    ClearData();
+                }
+
+                // only profit is used
+                if (ProfitPrice > 0 && close > ProfitPrice)
+                {
+                    ret = true;
+
+                    // display profit order
+                    if (ShowProfitTarget)
+                    {
+                        ChartPoint point = new ChartPoint(Bars.Time[0], ProfitPrice);
+                        ITextObject text = DrwText.Create(point, "-");
+                        text.Color = Color.Cyan;
+                    }
+                }
+                else
+                {
+                    ClearData();
+                }
+
+                // else no profit or stop loss is used for current trade
+            }
+
+            return ret;
+        }
+
+        #endregion
+
+        #region Print Functions
+        private bool DebugMode = true;
+        private void Print(string message)
+        {
+            // print messages if debug mode == true.
+            if (DebugMode == false) return;
+
+            // Print who is calling Print()
+            StackTrace stackTrace = new StackTrace();
+
+            Output.WriteLine("Project:  {0}   |   Caller:  {1}   |   Bar Time:  {2}   |   Message:  {3}",
+                Name,
+                stackTrace.GetFrame(1).GetMethod().Name,
+                Bars.TimeValue.ToString("dd-MM-yy HH:mm:ss tt"),
+                message);
+        }
+
+        #endregion
+    }
+
+    #endregion
+
     #region Test Functions
     public sealed class TestSeries : FunctionSeries<double>
     {

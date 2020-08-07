@@ -344,6 +344,7 @@
     <Compile Include="Inside_Bar_SE.Strategy.CS" />
     <Compile Include="__SherNing_PriceActionPatterns.Indicator.CS" />
     <Compile Include="__SherNing_PricePatterns.Strategy.CS" />
+    <Compile Include="__SherNing_PriceActionPatterns.Strategy.CS" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

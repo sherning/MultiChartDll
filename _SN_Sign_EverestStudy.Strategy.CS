@@ -40,6 +40,26 @@ namespace PowerLanguage.Strategy
     #region Everest Legacy Code
     public class _Everest_205v10 : SignalObject
     {
+        //==========================================================================================
+        // Name           : Legacy code for study
+        // Description    : Strategy
+        // Version        : v1.0
+        // Date Created   : 05 - Aug - 2020
+        // Time Taken     : 
+        // Remarks        : OCO Test
+        //==========================================================================================
+        // Copyright      : 2020, Sher Ning Technologies           
+        // License        :      
+        //==========================================================================================
+
+        /*  ----------------------------------- Version History -----------------------------------
+         *  
+         *  ----------------------------------- Version History -----------------------------------
+         *  
+         *  ------------------------------------ Project Notes ------------------------------------
+         *  - OCO orders without IOG
+         *  ------------------------------------ Project Notes ------------------------------------
+         */
         #region inputs
 
         // PasalCase for Inputs
@@ -500,11 +520,11 @@ namespace PowerLanguage.Strategy
         private VariableObject<double> upPALPivotPrice, upPALPivotPrice_1, upPALPivotPrice_2;
         private _SN_Trend_Tool_Price_Input trendToolPriceInput1;
         // Update to _SN_PAL120_f
-        private _SN_PAL120_f mPAL;
+        //private _SN_PAL120_f mPAL;
 
         // PAC
         private const int numOfTFs_PAC = 9;
-        private _SN_PAC_203_f PAC203;
+        //private _SN_PAC_203_f PAC203;
         private VariableSeries<double> vPAC_LowerVal;
         private VariableSeries<double> vPAC_UpperVal;
         private VariableSeries<bool> vPAC_LowerAct;
@@ -755,10 +775,10 @@ namespace PowerLanguage.Strategy
             upPALPivotPrice_1 = new VariableObject<double>(this);
             upPALPivotPrice_2 = new VariableObject<double>(this);
             trendToolPriceInput1 = new _SN_Trend_Tool_Price_Input(this);
-            mPAL = new _SN_PAL120_f(this);
+            //mPAL = new _SN_PAL120_f(this);
 
             // PAC
-            PAC203 = new _SN_PAC_203_f(this);
+            //PAC203 = new _SN_PAC_203_f(this);
 
             vPAC_LowerVal = new VariableSeries<double>(this);
             vPAC_UpperVal = new VariableSeries<double>(this);
@@ -990,96 +1010,96 @@ namespace PowerLanguage.Strategy
             mVol_Var_5.Mode_4_Weeks_Back = this.Mode_4_WeeksBack;
 
             // PAL
-            mPAL.Speed_Input = this.PA_Speed;
-            mPAL.Length_Input = this.PA_Length;
-            mPAL.TickBuffer = this.TickBuffer;
-            mPAL.Price_Input = this.PriceInput;
-            mPAL.SettingOriginalOrNew = PAL_SettingOriginalOrNew;
+            //mPAL.Speed_Input = this.PA_Speed;
+            //mPAL.Length_Input = this.PA_Length;
+            //mPAL.TickBuffer = this.TickBuffer;
+            //mPAL.Price_Input = this.PriceInput;
+            //mPAL.SettingOriginalOrNew = PAL_SettingOriginalOrNew;
 
             trendToolPriceInput1.Price_Input = this.PriceInput;
 
             // *** Critical: Make sure that the indicators input values match those of strategy input values ****
             // PAC_ATR_Type use PA_PAC_ATR_Type, regardless of what Vol_Var_Mode is
-            PAC203.ATR_Type = PA_PAC_ATR_Type;
+            //PAC203.ATR_Type = PA_PAC_ATR_Type;
             // PAC_ATR_Length use Vol_Var_Mode's Mode_2_ATR_Length_Input
-            PAC203.ATR_Length = ATR_Length;
-            PAC203.Speed = PA_Speed;
-            PAC203.Length = PA_Length;
-            PAC203.TickBuffer = this.TickBuffer;
-            PAC203.PriceInput = this.PriceInput;
-            PAC203.RangeMultiple = this.RangeMultiple;
-            PAC203.DistanceMultiple = this.DistanceMultiple;
-            PAC203.NewStepMultiple = this.NewStepMultiple;
-            PAC203.PivotLength = this.PivotLength;
-            PAC203.MinMovesPerPips = this.MinMovesPerPips;
-            Output.WriteLine("====== print to make sure PAC input match: Strategy =======");
-            Output.WriteLine("PAC203.ATR_Type = " + PAC203.ATR_Type.ToString());
-            Output.WriteLine("PAC203.ATR_Length = " + PAC203.ATR_Length.ToString());
-            Output.WriteLine("PAC203.Speed = " + PAC203.Speed.ToString());
-            Output.WriteLine("PAC203.Length = " + PAC203.Length.ToString());
-            Output.WriteLine("PAC203.TickBuffer = " + PAC203.TickBuffer.ToString());
-            Output.WriteLine("PAC203.PriceInput = " + PAC203.PriceInput.ToString());
-            Output.WriteLine("PAC203.RangeMultiple = " + PAC203.RangeMultiple.ToString());
-            Output.WriteLine("PAC203.DistanceMultiple = " + PAC203.DistanceMultiple.ToString());
-            Output.WriteLine("PAC203.NewStepMultiple = " + PAC203.NewStepMultiple.ToString());
-            Output.WriteLine("PAC203.PivotLength = " + PAC203.PivotLength.ToString());
-            Output.WriteLine("PAC203.MinMovesPerPips = " + PAC203.MinMovesPerPips.ToString());
+            //PAC203.ATR_Length = ATR_Length;
+            //PAC203.Speed = PA_Speed;
+            //PAC203.Length = PA_Length;
+            //PAC203.TickBuffer = this.TickBuffer;
+            //PAC203.PriceInput = this.PriceInput;
+            //PAC203.RangeMultiple = this.RangeMultiple;
+            //PAC203.DistanceMultiple = this.DistanceMultiple;
+            //PAC203.NewStepMultiple = this.NewStepMultiple;
+            //PAC203.PivotLength = this.PivotLength;
+            //PAC203.MinMovesPerPips = this.MinMovesPerPips;
+            //Output.WriteLine("====== print to make sure PAC input match: Strategy =======");
+            //Output.WriteLine("PAC203.ATR_Type = " + PAC203.ATR_Type.ToString());
+            //Output.WriteLine("PAC203.ATR_Length = " + PAC203.ATR_Length.ToString());
+            //Output.WriteLine("PAC203.Speed = " + PAC203.Speed.ToString());
+            //Output.WriteLine("PAC203.Length = " + PAC203.Length.ToString());
+            //Output.WriteLine("PAC203.TickBuffer = " + PAC203.TickBuffer.ToString());
+            //Output.WriteLine("PAC203.PriceInput = " + PAC203.PriceInput.ToString());
+            //Output.WriteLine("PAC203.RangeMultiple = " + PAC203.RangeMultiple.ToString());
+            //Output.WriteLine("PAC203.DistanceMultiple = " + PAC203.DistanceMultiple.ToString());
+            //Output.WriteLine("PAC203.NewStepMultiple = " + PAC203.NewStepMultiple.ToString());
+            //Output.WriteLine("PAC203.PivotLength = " + PAC203.PivotLength.ToString());
+            //Output.WriteLine("PAC203.MinMovesPerPips = " + PAC203.MinMovesPerPips.ToString());
 
             // Cannot comment out these not to be used in strategy
             // because the function need them to run
-            PAC203.haveValidPAC_5 = vhaveValidPAC_5;
-            PAC203.PAC_5_UpperVal = vPAC_5_UpperVal;
-            PAC203.PAC_5_LowerVal = vPAC_5_LowerVal;
-            PAC203.PAC_5_UpperAct = vPAC_5_UpperAct;
-            PAC203.PAC_5_LowerAct = vPAC_5_LowerAct;
-            PAC203.haveValidPAC_10 = vhaveValidPAC_10;
-            PAC203.PAC_10_UpperVal = vPAC_10_UpperVal;
-            PAC203.PAC_10_LowerVal = vPAC_10_LowerVal;
+            //PAC203.haveValidPAC_5 = vhaveValidPAC_5;
+            //PAC203.PAC_5_UpperVal = vPAC_5_UpperVal;
+            //PAC203.PAC_5_LowerVal = vPAC_5_LowerVal;
+            //PAC203.PAC_5_UpperAct = vPAC_5_UpperAct;
+            //PAC203.PAC_5_LowerAct = vPAC_5_LowerAct;
+            //PAC203.haveValidPAC_10 = vhaveValidPAC_10;
+            //PAC203.PAC_10_UpperVal = vPAC_10_UpperVal;
+            //PAC203.PAC_10_LowerVal = vPAC_10_LowerVal;
 
-            PAC203.PAC_10_UpperAct = vPAC_10_UpperAct;
-            PAC203.PAC_10_LowerAct = vPAC_10_LowerAct;
+            //PAC203.PAC_10_UpperAct = vPAC_10_UpperAct;
+            //PAC203.PAC_10_LowerAct = vPAC_10_LowerAct;
 
-            PAC203.haveValidPAC_15 = vhaveValidPAC_15;
-            PAC203.PAC_15_UpperVal = vPAC_15_UpperVal;
-            PAC203.PAC_15_LowerVal = vPAC_15_LowerVal;
-            PAC203.PAC_15_UpperAct = vPAC_15_UpperAct;
-            PAC203.PAC_15_LowerAct = vPAC_15_LowerAct;
+            //PAC203.haveValidPAC_15 = vhaveValidPAC_15;
+            //PAC203.PAC_15_UpperVal = vPAC_15_UpperVal;
+            //PAC203.PAC_15_LowerVal = vPAC_15_LowerVal;
+            //PAC203.PAC_15_UpperAct = vPAC_15_UpperAct;
+            //PAC203.PAC_15_LowerAct = vPAC_15_LowerAct;
 
-            PAC203.haveValidPAC_20 = vhaveValidPAC_20;
-            PAC203.PAC_20_UpperVal = vPAC_20_UpperVal;
-            PAC203.PAC_20_LowerVal = vPAC_20_LowerVal;
-            PAC203.PAC_20_UpperAct = vPAC_20_UpperAct;
-            PAC203.PAC_20_LowerAct = vPAC_20_LowerAct;
+            //PAC203.haveValidPAC_20 = vhaveValidPAC_20;
+            //PAC203.PAC_20_UpperVal = vPAC_20_UpperVal;
+            //PAC203.PAC_20_LowerVal = vPAC_20_LowerVal;
+            //PAC203.PAC_20_UpperAct = vPAC_20_UpperAct;
+            //PAC203.PAC_20_LowerAct = vPAC_20_LowerAct;
 
-            PAC203.haveValidPAC_30 = vhaveValidPAC_30;
-            PAC203.PAC_30_UpperVal = vPAC_30_UpperVal;
-            PAC203.PAC_30_LowerVal = vPAC_30_LowerVal;
-            PAC203.PAC_30_UpperAct = vPAC_30_UpperAct;
-            PAC203.PAC_30_LowerAct = vPAC_30_LowerAct;
+            //PAC203.haveValidPAC_30 = vhaveValidPAC_30;
+            //PAC203.PAC_30_UpperVal = vPAC_30_UpperVal;
+            //PAC203.PAC_30_LowerVal = vPAC_30_LowerVal;
+            //PAC203.PAC_30_UpperAct = vPAC_30_UpperAct;
+            //PAC203.PAC_30_LowerAct = vPAC_30_LowerAct;
 
-            PAC203.haveValidPAC_60 = vhaveValidPAC_60;
-            PAC203.PAC_60_UpperVal = vPAC_60_UpperVal;
-            PAC203.PAC_60_LowerVal = vPAC_60_LowerVal;
-            PAC203.PAC_60_UpperAct = vPAC_60_UpperAct;
-            PAC203.PAC_60_LowerAct = vPAC_60_LowerAct;
+            //PAC203.haveValidPAC_60 = vhaveValidPAC_60;
+            //PAC203.PAC_60_UpperVal = vPAC_60_UpperVal;
+            //PAC203.PAC_60_LowerVal = vPAC_60_LowerVal;
+            //PAC203.PAC_60_UpperAct = vPAC_60_UpperAct;
+            //PAC203.PAC_60_LowerAct = vPAC_60_LowerAct;
 
-            PAC203.haveValidPAC_120 = vhaveValidPAC_120;
-            PAC203.PAC_120_UpperVal = vPAC_120_UpperVal;
-            PAC203.PAC_120_LowerVal = vPAC_120_LowerVal;
-            PAC203.PAC_120_UpperAct = vPAC_120_UpperAct;
-            PAC203.PAC_120_LowerAct = vPAC_120_LowerAct;
+            //PAC203.haveValidPAC_120 = vhaveValidPAC_120;
+            //PAC203.PAC_120_UpperVal = vPAC_120_UpperVal;
+            //PAC203.PAC_120_LowerVal = vPAC_120_LowerVal;
+            //PAC203.PAC_120_UpperAct = vPAC_120_UpperAct;
+            //PAC203.PAC_120_LowerAct = vPAC_120_LowerAct;
 
-            PAC203.haveValidPAC_240 = vhaveValidPAC_240;
-            PAC203.PAC_240_UpperVal = vPAC_240_UpperVal;
-            PAC203.PAC_240_LowerVal = vPAC_240_LowerVal;
-            PAC203.PAC_240_UpperAct = vPAC_240_UpperAct;
-            PAC203.PAC_240_LowerAct = vPAC_240_LowerAct;
+            //PAC203.haveValidPAC_240 = vhaveValidPAC_240;
+            //PAC203.PAC_240_UpperVal = vPAC_240_UpperVal;
+            //PAC203.PAC_240_LowerVal = vPAC_240_LowerVal;
+            //PAC203.PAC_240_UpperAct = vPAC_240_UpperAct;
+            //PAC203.PAC_240_LowerAct = vPAC_240_LowerAct;
 
-            PAC203.haveValidPAC_Day = vhaveValidPAC_Day;
-            PAC203.PAC_Day_UpperVal = vPAC_Day_UpperVal;
-            PAC203.PAC_Day_LowerVal = vPAC_Day_LowerVal;
-            PAC203.PAC_Day_UpperAct = vPAC_Day_UpperAct;
-            PAC203.PAC_Day_LowerAct = vPAC_Day_LowerAct;
+            //PAC203.haveValidPAC_Day = vhaveValidPAC_Day;
+            //PAC203.PAC_Day_UpperVal = vPAC_Day_UpperVal;
+            //PAC203.PAC_Day_LowerVal = vPAC_Day_LowerVal;
+            //PAC203.PAC_Day_UpperAct = vPAC_Day_UpperAct;
+            //PAC203.PAC_Day_LowerAct = vPAC_Day_LowerAct;
         }
 
         protected override void CalcBar()
@@ -1123,18 +1143,18 @@ namespace PowerLanguage.Strategy
 
                 Vol_Var_5.Value = mVol_Var_5.Value;
 
-                mPAL.Call();
-                PAL_5.Value = mPAL.PAL_5[0];
-                vPALs[0].Value = mPAL.PAL_5[0];
-                vPALs[1].Value = mPAL.PAL_15[0];
-                vPALs[2].Value = mPAL.PAL_20[0];
-                vPALs[3].Value = mPAL.PAL_30[0];
-                vPALs[4].Value = mPAL.PAL_60[0];
-                vPALs[5].Value = mPAL.PAL_120[0];
-                vPALs[6].Value = mPAL.PAL_240[0];
-                vPALs[7].Value = mPAL.PAL_Day[0];
+                //mPAL.Call();
+                //PAL_5.Value = mPAL.PAL_5[0];
+                //vPALs[0].Value = mPAL.PAL_5[0];
+                //vPALs[1].Value = mPAL.PAL_15[0];
+                //vPALs[2].Value = mPAL.PAL_20[0];
+                //vPALs[3].Value = mPAL.PAL_30[0];
+                //vPALs[4].Value = mPAL.PAL_60[0];
+                //vPALs[5].Value = mPAL.PAL_120[0];
+                //vPALs[6].Value = mPAL.PAL_240[0];
+                //vPALs[7].Value = mPAL.PAL_Day[0];
 
-                PAC203.Call();
+                //PAC203.Call();
 
                 isUpTrend.Value = isUpTrend_f();
                 isTradeTime.Value = isTradeTime_f();

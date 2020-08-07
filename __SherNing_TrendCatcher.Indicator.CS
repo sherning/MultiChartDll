@@ -289,7 +289,7 @@ namespace PowerLanguage.Indicator
                 // check for null exception error 
                 CalcFractalChannel1();
                 CalcFractalChannel2();
-                CurrentInsideBar();
+                //CurrentInsideBar();
 
                 // set plot values on chart
                 PlotPamaValues();
