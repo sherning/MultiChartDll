@@ -7333,47 +7333,66 @@ namespace PowerLanguage.Function
          *  ----------------------------------- Version History -----------------------------------
          *  
          *  ------------------------------------ Project Notes ------------------------------------
-         *  - Function returns true if current position is open
-         *  - Function series will auto-call implicitly, without call() once every closing tick
-         *  - How to integrate strategy orders to function
-         *  - know exactly what happens when a trade is triggered.
+         *  - Order information for single entry with a stop loss and 3 X profit target
          *  ------------------------------------ Project Notes ------------------------------------
          */
 
         // properties - order type
         public string EntryName { get; set; }
-        public EMarketPositionSide TradeDirection { get; set; }
+        /// <summary>
+        /// Order direction - Either Long or Short
+        /// </summary>
+        public EMarketPositionSide Direction { get; set; }
 
         // properties - price control
         public double EntryPrice { get; set; }
         public double StopLossPrice { get; set; }
         public double ProfitPrice { get; set; }
+        public double ProfitPrice2 { get; set; }
+        public double ProfitPrice3 { get; set; }
 
         // properties - risk control
         public double RiskValue { get; set; }
-        public double RiskReward { get; set; }
         public int Contracts { get; set; }
+
 
         // properties - trade control
         public bool Active { get; set; }
-        public VariableSeries<EMarketPositionSide> PosSide { get; set; }
 
 
         // properties - display controls
+        /// <summary>
+        /// If true displays the stop loss value on chart
+        /// </summary>
         public bool ShowStopLoss { get; set; }
+        /// <summary>
+        /// If true displays the profit(s) value(s) on chart
+        /// </summary>
         public bool ShowProfitTarget { get; set; }
 
         // constructor
-        public OrderInfo(CStudyControl m) : base(m) { }
+        /// <summary>
+        /// direction - Either Long or Short
+        /// </summary>
+        /// <param name="m"></param>
+        /// <param name="direction"></param>
+        public OrderInfo (CStudyControl m, EMarketPositionSide direction) : base(m)
+        {
+            // initialize key context
+            Direction = direction;
+        }
 
         // reference fields
         protected override void Create()
         {
-            PosSide = new VariableSeries<EMarketPositionSide>(this);
         }
 
         // value fields
-        double OnePip;
+        /// <summary>
+        /// One pip == 10 Ticks
+        /// </summary>
+        public double OnePip { get; private set; }
+        bool Profit1Txt, Profit2Txt, Profit3Txt, StopLossTxt;
         protected override void StartCalc()
         {
             OnePip = (Bars.Info.BigPointValue / Bars.Info.PriceScale) * 10;
@@ -7384,139 +7403,400 @@ namespace PowerLanguage.Function
 
         public void ClearData()
         {
-            // reset fields
+            // reset all fields
             Active = false;
-            StopLossPrice = ProfitPrice = 0;
-
-            Print("Active: " + Active);
+            Contracts = 0;
+            RiskValue = StopLossPrice = 0;
+            ProfitPrice = ProfitPrice2 = ProfitPrice3 = 0;
+            Profit1Txt = Profit2Txt = Profit3Txt = StopLossTxt = false;
         }
 
         protected override bool CalcBar()
         {
-            bool state;
-
-            switch (TradeDirection)
+            switch (Direction)
             {
                 // if direction is long
                 case EMarketPositionSide.Long:
-                    state = LeEntry();
-                    break;
+                    return LeEntry();
 
                 // if direction is short
                 case EMarketPositionSide.Short:
-                    state = SeEntry();
-                    break;
+                    return SeEntry();
 
                 // no direction given
                 default:
-                    state = false;
-                    break;
+                    return false;
             }
-
-            if (PosSide[1] != EMarketPositionSide.Flat && PosSide[0] == EMarketPositionSide.Flat)
-                ClearData();
-
-            return state;
         }
 
-        #region Methods
+        #region Class Methods
         private bool LeEntry()
         {
-            double close = Bars.Close[0];
             bool ret = false;
 
             // trade is active. 
             if (Active)
             {
-                // only stop loss is used
-                if (StopLossPrice > 0 && close > StopLossPrice)
+                // stop loss is used
+                if (StopLossPrice > 0)
                 {
-                    ret = true;
-
-                    // display stop loss order
-                    if (ShowStopLoss)
+                    // check if stop loss is NOT hit
+                    if (Bars.Low[0] > StopLossPrice)
                     {
-                        ChartPoint point = new ChartPoint(Bars.Time[0], StopLossPrice);
-                        ITextObject text = DrwText.Create(point, "-");
-                        text.Color = Color.Yellow;
+                        ret = true;
+
+                        // display stop loss order
+                        if (ShowStopLoss && this[0] == true)
+                        {
+                            ChartPoint point = new ChartPoint(Bars.Time[0], StopLossPrice);
+                            ITextObject text = DrwText.Create(point, "-");
+                            text.Color = Color.Yellow;
+
+                            if (!StopLossTxt)
+                            {
+                                ChartPoint p = new ChartPoint(
+                                   Bars.FullSymbolData.Time[-1], StopLossPrice + (2 * OnePip));
+                                ITextObject txt = DrwText.Create(p, "SL");
+                                txt.Color = Color.Yellow;
+                                StopLossTxt = true;
+                            }
+                        }
+                    }
+
+                    // if stop loss is used and hit
+                    else ClearData();
+                }
+
+                // check if profit price 3 is used
+                if (ProfitPrice3 > 0)
+                {
+                    // check if profit price 3 is NOT hit
+                    if (Bars.High[0] < ProfitPrice3)
+                    {
+                        ret = true;
+
+                        // only function series can use this[0]
+                        if (ShowProfitTarget && this[0] == true)
+                        {
+                            ChartPoint point = new ChartPoint(Bars.Time[0], ProfitPrice3);
+                            ITextObject text = DrwText.Create(point, "-");
+                            text.Color = Color.Cyan;
+
+                            if (!Profit3Txt)
+                            {
+                                ChartPoint p = new ChartPoint(
+                                    Bars.FullSymbolData.Time[-1], ProfitPrice3 + (2 * OnePip));
+                                ITextObject txt = DrwText.Create(p, "P3");
+                                txt.Color = Color.Cyan;
+                                Profit3Txt = true;
+                            }
+                        }
+                    }
+                    // check if other profit prices are being used
+                    else
+                    {
+                        // other profit prices in play
+                        if (ProfitPrice > 0 || ProfitPrice2 > 0) ProfitPrice3 = 0;
+                        else ClearData();
                     }
                 }
-                else
-                {
-                    ClearData();
-                }
 
-                // only profit is used
-                if (ProfitPrice > 0 && close < ProfitPrice)
+                // check if profit price 2 is in used
+                if (ProfitPrice2 > 0)
                 {
-                    ret = true;
-
-                    if (ShowProfitTarget)
+                    if (Bars.High[0] < ProfitPrice2)
                     {
-                        ChartPoint point = new ChartPoint(Bars.Time[0], ProfitPrice);
-                        ITextObject text = DrwText.Create(point, "-");
-                        text.Color = Color.Cyan;
+                        ret = true;
+
+                        // only function series can use this[0]
+                        if (ShowProfitTarget && this[0] == true)
+                        {
+                            ChartPoint point = new ChartPoint(Bars.Time[0], ProfitPrice2);
+                            ITextObject text = DrwText.Create(point, "-");
+                            text.Color = Color.Cyan;
+
+                            if (!Profit2Txt)
+                            {
+                                ChartPoint p = new ChartPoint(
+                                    Bars.FullSymbolData.Time[-1], ProfitPrice2 + (2 * OnePip));
+                                ITextObject txt = DrwText.Create(p, "P2");
+                                txt.Color = Color.Cyan;
+                                Profit2Txt = true;
+                            }
+                        }
+                    }
+                    // check if other profit prices are being used
+                    else
+                    {
+                        // other profit prices in play
+                        if (ProfitPrice > 0 || ProfitPrice3 > 0) ProfitPrice2 = 0;
+                        else ClearData();
                     }
                 }
-                else
+
+                // check if profit price is in used
+                if (ProfitPrice > 0)
                 {
-                    ClearData();
+                    // profit price is still in play
+                    if (Bars.High[0] < ProfitPrice)
+                    {
+                        ret = true;
+
+                        // only function series can use this[0]
+                        if (ShowProfitTarget && this[0] == true)
+                        {
+                            ChartPoint point = new ChartPoint(Bars.Time[0], ProfitPrice);
+                            ITextObject text = DrwText.Create(point, "-");
+                            text.Color = Color.Cyan;
+
+                            if (!Profit1Txt)
+                            {
+                                ChartPoint p = new ChartPoint(
+                                    Bars.FullSymbolData.Time[-1], ProfitPrice + (2 * OnePip));
+                                ITextObject txt = DrwText.Create(p, "P1");
+                                txt.Color = Color.Cyan;
+                                Profit1Txt = true;
+                            }
+                        }
+                    }
+                    // check if other profit prices are being used
+                    else
+                    {
+                        // other profit prices in play
+                        if (ProfitPrice2 > 0 || ProfitPrice3 > 0) ProfitPrice = 0;
+                        else ClearData();
+                    }
                 }
             }
 
             return ret;
         }
-
         private bool SeEntry()
         {
-            double close = Bars.Close[0];
             bool ret = false;
 
             // trade is active. 
             if (Active)
             {
-                // only stop loss is used
-                if (StopLossPrice > 0 && close < StopLossPrice)
+                // stop loss is used
+                if (StopLossPrice > 0)
                 {
-                    ret = true;
-
-                    // display stop loss order
-                    if (ShowStopLoss)
+                    // check if stop loss is NOT hit
+                    if (Bars.High[0] < StopLossPrice)
                     {
-                        ChartPoint point = new ChartPoint(Bars.Time[0], StopLossPrice);
-                        ITextObject text = DrwText.Create(point, "-");
-                        text.Color = Color.Yellow;
+                        ret = true;
+
+                        // display stop loss order
+                        if (ShowStopLoss && this[0] == true)
+                        {
+                            ChartPoint point = new ChartPoint(Bars.Time[0], StopLossPrice);
+                            ITextObject text = DrwText.Create(point, "-");
+                            text.Color = Color.Yellow;
+
+                            if (!StopLossTxt)
+                            {
+                                ChartPoint p = new ChartPoint(
+                                   Bars.FullSymbolData.Time[-1], StopLossPrice + (2 * OnePip));
+                                ITextObject txt = DrwText.Create(p, "SL");
+                                txt.Color = Color.Yellow;
+                                StopLossTxt = true;
+                            }
+                        }
+                    }
+
+                    // if stop loss is used and hit
+                    else ClearData();
+                }
+
+                // check if profit price 3 is used
+                if (ProfitPrice3 > 0)
+                {
+                    // check if profit price 3 is NOT hit
+                    if (Bars.Low[0] > ProfitPrice3)
+                    {
+                        ret = true;
+
+                        // only function series can use this[0]
+                        if (ShowProfitTarget && this[0] == true)
+                        {
+                            ChartPoint point = new ChartPoint(Bars.Time[0], ProfitPrice3);
+                            ITextObject text = DrwText.Create(point, "-");
+                            text.Color = Color.Cyan;
+
+                            if (!Profit3Txt)
+                            {
+                                ChartPoint p = new ChartPoint(
+                                    Bars.FullSymbolData.Time[-1], ProfitPrice3 + (2 * OnePip));
+                                ITextObject txt = DrwText.Create(p, "P3");
+                                txt.Color = Color.Cyan;
+                                Profit3Txt = true;
+                            }
+                        }
+                    }
+                    // check if other profit prices are being used
+                    else
+                    {
+                        // other profit prices in play
+                        if (ProfitPrice > 0 || ProfitPrice2 > 0) ProfitPrice3 = 0;
+                        else ClearData();
                     }
                 }
-                else
-                {
-                    ClearData();
-                }
 
-                // only profit is used
-                if (ProfitPrice > 0 && close > ProfitPrice)
+                // check if profit price 2 is in used
+                if (ProfitPrice2 > 0)
                 {
-                    ret = true;
-
-                    // display profit order
-                    if (ShowProfitTarget)
+                    if (Bars.Low[0] > ProfitPrice2)
                     {
-                        ChartPoint point = new ChartPoint(Bars.Time[0], ProfitPrice);
-                        ITextObject text = DrwText.Create(point, "-");
-                        text.Color = Color.Cyan;
+                        ret = true;
+
+                        // only function series can use this[0]
+                        if (ShowProfitTarget && this[0] == true)
+                        {
+                            ChartPoint point = new ChartPoint(Bars.Time[0], ProfitPrice2);
+                            ITextObject text = DrwText.Create(point, "-");
+                            text.Color = Color.Cyan;
+
+                            if (!Profit2Txt)
+                            {
+                                ChartPoint p = new ChartPoint(
+                                    Bars.FullSymbolData.Time[-1], ProfitPrice2 + (2 * OnePip));
+                                ITextObject txt = DrwText.Create(p, "P2");
+                                txt.Color = Color.Cyan;
+                                Profit2Txt = true;
+                            }
+                        }
+                    }
+                    // check if other profit prices are being used
+                    else
+                    {
+                        // other profit prices in play
+                        if (ProfitPrice > 0 || ProfitPrice3 > 0) ProfitPrice2 = 0;
+                        else ClearData();
                     }
                 }
-                else
-                {
-                    ClearData();
-                }
 
-                // else no profit or stop loss is used for current trade
+                // check if profit price is in used
+                if (ProfitPrice > 0)
+                {
+                    // profit price is still in play
+                    if (Bars.Low[0] > ProfitPrice)
+                    {
+                        ret = true;
+
+                        // only function series can use this[0]
+                        if (ShowProfitTarget && this[0] == true)
+                        {
+                            ChartPoint point = new ChartPoint(Bars.Time[0], ProfitPrice);
+                            ITextObject text = DrwText.Create(point, "-");
+                            text.Color = Color.Cyan;
+
+                            if (!Profit1Txt)
+                            {
+                                ChartPoint p = new ChartPoint(
+                                    Bars.FullSymbolData.Time[-1], ProfitPrice + (2 * OnePip));
+                                ITextObject txt = DrwText.Create(p, "P1");
+                                txt.Color = Color.Cyan;
+                                Profit1Txt = true;
+                            }
+                        }
+                    }
+                    // check if other profit prices are being used
+                    else
+                    {
+                        // other profit prices in play
+                        if (ProfitPrice2 > 0 || ProfitPrice3 > 0) ProfitPrice = 0;
+                        else ClearData();
+                    }
+                }
             }
 
             return ret;
         }
 
+        #endregion
+
+        #region Calculate
+        /// <summary>
+        /// Returns the profit price for the given risk reward, 
+        /// requires EntryPrice > 0 and StopLossPrice > 0
+        /// </summary>
+        /// <param name="riskReward"></param>
+        /// <returns></returns>
+        public double CalcProfitPrice(int riskReward)
+        {
+            double profitPrice = 0;
+
+            // both entry price and stop loss price are valid
+            if (EntryPrice <= 0 && StopLossPrice <= 0) return profitPrice;
+
+            RiskValue = Math.Abs(EntryPrice - StopLossPrice);
+
+            // long entry
+            if (Direction == EMarketPositionSide.Long)
+                profitPrice = EntryPrice + (RiskValue * riskReward);
+
+            // short entry
+            else if (Direction == EMarketPositionSide.Short)
+                profitPrice = EntryPrice - (RiskValue * riskReward);
+
+            // cannot cache profit(local) to ProfitPrice as there are 3 diff targets
+            return profitPrice;
+        }
+        /// <summary>
+        /// Returns the risk value, 
+        /// requires EntryPrice > 0 and StopLossPrice > 0, otherwise risk = 0
+        /// </summary>
+        /// <returns></returns>
+        public double CalcRiskValue()
+        {
+            double risk = 0;
+
+            // both entry price and stop loss price are valid
+            if (EntryPrice <= 0 && StopLossPrice <= 0) return risk;
+
+            risk = Math.Abs(EntryPrice - StopLossPrice);
+            RiskValue = risk;
+
+            return risk;
+        }
+        /// <summary>
+        /// Returns the lowest low for the given number of bars 
+        /// (include current bar)
+        /// </summary>
+        /// <param name="bars"></param>
+        /// <returns></returns>
+        public double CalcLowestLow(int bars)
+        {
+            // bars has to be 1 or greater
+            if (bars <= 0) return 0;
+
+            double low = double.MaxValue;
+
+            // get the ten bar high value
+            for (int i = 0; i < bars; i++)
+                low = Math.Min(low, Bars.Low[i]);
+
+            return low;
+        }
+        /// <summary>
+        /// Returns the highest high for the given number of bars 
+        /// (include current bar)
+        /// </summary>
+        /// <param name="bars"></param>
+        /// <returns></returns>
+        public double CalcHighestHigh(int bars)
+        {
+            // bars has to be 1 or greater
+            if (bars <= 0) return 0;
+
+            double high = 0;
+
+            // get the ten bar high value, include current high
+            for (int i = 0; i < bars; i++)
+                high = Math.Max(high, Bars.High[i]);
+
+            return high;
+        }
         #endregion
 
         #region Print Functions
