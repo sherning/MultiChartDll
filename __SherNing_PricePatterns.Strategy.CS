@@ -9,7 +9,8 @@ using System.Collections.Generic;
 namespace PowerLanguage.Strategy
 {
     #region Strategy - Price Pattern v20
-    [IOGMode(IOGMode.Enabled)]
+
+    [IOGMode(IOGMode.Disabled)]
     public class __SherNing_PricePatterns : SignalObject
     {
         //=========================================================================================
@@ -28,31 +29,41 @@ namespace PowerLanguage.Strategy
          *----------------------------------------- Version ---------------------------------------
          *  - Need to test with market position and position side
          *  - Need IOG for same bar exit
-         *  
+         *  - Implement proper source control
+         *  - Success, attend to special cases.
+         *  - multi exits requires strategy settings set to multi exits on same bar
          *----------------------------------------- Version ---------------------------------------
            
          *------------------------------------------ Notes ----------------------------------------
          *  - Design a strategy to have one entry, one stop and 2 profit targets
+         *  - Build the Trade Info inside strategy first
          *------------------------------------------ Notes ----------------------------------------
         /*/
-      
-        public __SherNing_PricePatterns (object _ctx) : base(_ctx)
+
+        // strategy inputs
+
+        public __SherNing_PricePatterns(object _ctx) : base(_ctx)
         {
-           
+
         }
 
         // reference fields 
         PricePatternStrategy PricePattern;
         VariableSeries<double> Pama1, Pama2, Pama3;
-        VariableSeries<int> MarketPosition;
-        VariableSeries<EMarketPositionSide> PosSide;
+        VariableSeries<int> MktPosition;
+        VariableSeries<EMarketPositionSide> MktDirection;
         IOrderMarket LeMkt, SeMkt;
         IOrderPriced LeStp, SeStp;
         IOrderPriced LePft1, LePft2, SePft;
 
+        TradeInfo LeEntry;
+        VariableSeries<int> CurrentBars;
+
         protected override void Create()
         {
             PricePattern = new PricePatternStrategy(this);
+            LeEntry = new TradeInfo(this);
+            CurrentBars = new VariableSeries<int>(this);
 
             // entry
             LeMkt = OrderCreator.MarketNextBar(new SOrderParameters(
@@ -78,28 +89,30 @@ namespace PowerLanguage.Strategy
             SePft = OrderCreator.Limit(new SOrderParameters(
                 Contracts.Default, "SX_P1", EOrderAction.BuyToCover));
 
-            MarketPosition = new VariableSeries<int>(this);
-            PosSide = new VariableSeries<EMarketPositionSide>(this);
+            MktPosition = new VariableSeries<int>(this);
+            MktDirection = new VariableSeries<EMarketPositionSide>(this);
 
             // clear output window
             Output.Clear();
         }
 
         // value fields 
+        double OnePip;
         protected override void StartCalc()
         {
             PricePattern._Length = 6;
             PricePattern._Smooth = 10;
+            OnePip = (Bars.Info.BigPointValue / Bars.Info.PriceScale) * 10;
         }
 
         protected override void CalcBar()
         {
-            // call strategy function
-            PricePattern.Call();
+            // call strategy function on closing tick
+            if (Bars.Status == EBarState.Close) PricePattern.Call();
 
             // keep track of market position
-            MarketPosition.Value = StrategyInfo.MarketPosition;
-            PosSide.Value = CurrentPosition.Side;
+            MktPosition.Value = StrategyInfo.MarketPosition;
+            MktDirection.Value = CurrentPosition.Side;
 
             if (Bars.CurrentBar == 1)
             {
@@ -108,24 +121,191 @@ namespace PowerLanguage.Strategy
                 Pama2 = PricePattern.Pama2;
                 Pama3 = PricePattern.Pama3;
             }
-           
+
+            SendEntryOrders();
+            SendExitOrders();
+            //Debug();
         }
 
         #region Send Order Command
+        DateTime CurrentTime;
+        private void Debug()
+        {
+            // debug market position and market direction
+            int barNum = 5342;
+            // to debug specific bar. use chart number - maxbarsback(50)
+
+            int maxBarsBack = ExecInfo.MaxBarsBack;
+            if (Bars.CurrentBar >= (barNum - maxBarsBack) && Bars.CurrentBar < (barNum - maxBarsBack + 10))
+            {
+                DateTime time = Bars.TimeValue;
+
+                if (time != CurrentTime)
+                {
+                    CurrentTime = time;
+                    Output.WriteLine("");
+                }
+
+                //Print("Bar Number: " + Bars.CurrentBar);
+                //Print("Entry Price: " + LeEntry.EntryPrice);
+                //Print("Stop Loss Price: " + LeEntry.StopLossPrice);
+
+
+                if (Bars.Status == EBarState.Open)
+                {
+                    Print("Bar Open");
+                    LeEntry.Debug();
+
+                }
+                if (Bars.Status == EBarState.Inside)
+                {
+                    Print("Bar Inside");
+
+                    LeEntry.Debug();
+
+                }
+                if (Bars.Status == EBarState.Close)
+                {
+                    Print("Bar Close");
+                    LeEntry.Debug();
+
+                }
+            }
+        }
+        private void Reset()
+        {
+
+        }
         private void SendEntryOrders()
         {
-          
-           
-        }
+            // send entry orders on closing tick
+            if (Bars.Status != EBarState.Close) return;
 
+            // long entry condition are valid
+            if (LeConditions() && LeEntry.SendEntry == false)
+            {
+                double close = Bars.Close[0];
+                double stop = CalcLowestLow(4);
+
+                LeEntry.EntryPrice = close;
+                LeEntry.StopLossPrice = stop - OnePip;
+                LeEntry.SendStopLoss = true;
+                LeEntry.ProfitPrice1 = close + ((close - stop) * 1);
+                LeEntry.SendProfit1 = true;
+                LeEntry.ProfitPrice2 = close + ((close - stop) * 2);
+                LeEntry.SendProfit2 = true;
+                LeEntry.Contracts = 100000;
+                LeEntry.ProfitQty1 = 50000;
+                LeEntry.ProfitQty2 = 50000;
+                LeMkt.Send(LeEntry.Contracts);
+                LeEntry.SendEntry = true;
+            }
+
+            //Debug();
+        }
         private void SendExitOrders()
         {
-           
-         
+            DateTime time = Bars.Time[0];
+
+            if (LeEntry.SendStopLoss)
+            {
+                LeStp.Send(LeEntry.StopLossPrice);
+
+                if (Bars.Status == EBarState.Close)
+                {
+                    ChartPoint p = new ChartPoint(time, LeEntry.StopLossPrice);
+                    ITextObject txt = DrwText.Create(p, "-");
+                    txt.Color = Color.Yellow;
+                }
+            }
+            if (LeEntry.SendProfit1)
+            {
+                LePft1.Send(LeEntry.ProfitPrice1, LeEntry.ProfitQty1);
+                if (Bars.Status == EBarState.Close)
+                {
+                    ChartPoint p = new ChartPoint(time, LeEntry.ProfitPrice1);
+                    ITextObject txt = DrwText.Create(p, "-");
+                    txt.Color = Color.Cyan;
+                }
+            }
+            if (LeEntry.SendProfit2)
+            {
+                LePft2.Send(LeEntry.ProfitPrice2, LeEntry.ProfitQty2);
+                if (Bars.Status == EBarState.Close)
+                {
+                    ChartPoint p = new ChartPoint(time, LeEntry.ProfitPrice2);
+                    ITextObject txt = DrwText.Create(p, "-");
+                    txt.Color = Color.Cyan;
+                }
+            }
+
+            // reset
+            //double close = Bars.Close[0];
+
+            if (Bars.Low[0] <= LeEntry.StopLossPrice)
+            {
+                LeEntry.SendProfit2 = LeEntry.SendProfit1 = LeEntry.SendStopLoss = false;
+                LeEntry.StopLossPrice = LeEntry.ProfitPrice1 = LeEntry.ProfitPrice2 = 0;
+                LeEntry.ProfitQty1 = LeEntry.ProfitQty2 = 0;
+                LeEntry.Contracts = 0;
+                LeEntry.EntryPrice = 0;
+                LeEntry.SendEntry = false;
+            }
+
+            if (Bars.High[0] >= LeEntry.ProfitPrice1 && Bars.High[0] >= LeEntry.ProfitPrice2)
+            {
+                LeEntry.SendProfit2 = LeEntry.SendProfit1 = LeEntry.SendStopLoss = false;
+                LeEntry.StopLossPrice = LeEntry.ProfitPrice1 = LeEntry.ProfitPrice2 = 0;
+                LeEntry.ProfitQty1 = LeEntry.ProfitQty2 = 0;
+                LeEntry.Contracts = 0;
+                LeEntry.EntryPrice = 0;
+                LeEntry.SendEntry = false;
+            }
+
+            else if (Bars.High[0] >= LeEntry.ProfitPrice1)
+            {
+                LeEntry.SendProfit1 = false;
+                LeEntry.ProfitPrice1 = 0;
+                LeEntry.ProfitQty1 = 0;
+            }
+
+            else if (Bars.High[0] >= LeEntry.ProfitPrice2)
+            {
+                LeEntry.SendProfit2 = false;
+                LeEntry.ProfitPrice2 = 0;
+                LeEntry.ProfitQty2 = 0;
+            }
         }
         #endregion
 
         #region Strategy Conditions
+
+        public double CalcLowestLow(int bars)
+        {
+            // bars has to be 1 or greater
+            if (bars <= 0) return 0;
+
+            double low = double.MaxValue;
+
+            // get the ten bar high value
+            for (int i = 0; i < bars; i++)
+                low = Math.Min(low, Bars.Low[i]);
+
+            return low;
+        }
+        public double CalcHighestHigh(int bars)
+        {
+            // bars has to be 1 or greater
+            if (bars <= 0) return 0;
+
+            double high = 0;
+
+            // get the ten bar high value, include current high
+            for (int i = 0; i < bars; i++)
+                high = Math.Max(high, Bars.High[i]);
+
+            return high;
+        }
         private bool LeConditions()
         {
             if (PamaBottom() && BarHighBreak(4))
@@ -229,7 +409,7 @@ namespace PowerLanguage.Strategy
         protected override void Create()
         {
             PricePattern = new PricePatternStrategy(this);
-            LeEntry = new TradeInfo_v11 (this, EMarketPositionSide.Long);
+            LeEntry = new TradeInfo_v11(this, EMarketPositionSide.Long);
 
             // entry
             LeMkt = OrderCreator.MarketNextBar(new SOrderParameters(
@@ -290,7 +470,7 @@ namespace PowerLanguage.Strategy
             if (Bars.Status == EBarState.Close) SendEntryOrders();
 
             SendExitOrders();
-           
+
         }
 
         #region Send Order Command
@@ -459,7 +639,24 @@ namespace PowerLanguage.Function
          *------------------------------------------ Notes ----------------------------------------
         /*/
 
-        // properties
+        // entry and stop properties
+        public double EntryPrice { get; set; }
+        public bool SendEntry { get; set; }
+
+        public int Contracts { get; set; }
+        public double StopLossPrice { get; set; }
+        public bool SendStopLoss { get; set; }
+
+        // profit 1 properties
+        public double ProfitPrice1 { get; set; }
+        public int ProfitQty1 { get; set; }
+        public bool SendProfit1 { get; set; }
+
+
+        // profit 2 properties
+        public double ProfitPrice2 { get; set; }
+        public int ProfitQty2 { get; set; }
+        public bool SendProfit2 { get; set; }
 
         public TradeInfo(CStudyControl m) : base(m)
         {
@@ -469,12 +666,29 @@ namespace PowerLanguage.Function
         protected override void StartCalc()
         {
         }
+
         protected override int CalcBar()
         {
-
-            return 0;
+            return Contracts;
         }
 
+        #region Debug
+        public void Debug()
+        {
+            Print("Send Entry: " + SendEntry);
+            Print("Entry Price: " + EntryPrice);
+            Print("Send Stop Loss: " + SendStopLoss);
+            Print("Stop Loss Price: " + StopLossPrice);
+            Print("Send Profit 1: " + SendProfit1);
+            Print("Profit Price 1: " + ProfitPrice1);
+            Print("Profit Qty 1: " + ProfitQty1);
+            Print("Send Profit 2: " + SendProfit2);
+            Print("Profit Price 2: " + ProfitPrice2);
+            Print("Profit Qty 2: " + ProfitQty2);
+            Print("Contracts: " + Contracts);
+            Output.WriteLine("");
+        }
+        #endregion
         #region Print Functions
         private bool DebugMode = true;
         private void Print(string message)
@@ -533,7 +747,7 @@ namespace PowerLanguage.Function
 
         public EMarketPositionSide Direction { get; private set; }
 
-        public TradeInfo_v11 (CStudyControl m, EMarketPositionSide direction) : base(m)
+        public TradeInfo_v11(CStudyControl m, EMarketPositionSide direction) : base(m)
         {
             Direction = direction;
         }

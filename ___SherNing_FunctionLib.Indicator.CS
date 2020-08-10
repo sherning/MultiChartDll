@@ -7313,8 +7313,11 @@ namespace PowerLanguage.Function
 
     #endregion
 
-    #region Order Info
-    public sealed class OrderInfo : FunctionSeries<bool>
+    #region Trade Info
+
+
+    #region Function - Trade Info v00
+    public sealed class TradeInfo_v00 : FunctionSeries<bool>
     {
         //==========================================================================================
         // Name           : Strategy Order Function
@@ -7376,7 +7379,7 @@ namespace PowerLanguage.Function
         /// </summary>
         /// <param name="m"></param>
         /// <param name="direction"></param>
-        public OrderInfo (CStudyControl m, EMarketPositionSide direction) : base(m)
+        public TradeInfo_v00(CStudyControl m, EMarketPositionSide direction) : base(m)
         {
             // initialize key context
             Direction = direction;
@@ -7818,6 +7821,8 @@ namespace PowerLanguage.Function
 
         #endregion
     }
+
+    #endregion
 
     #endregion
 
