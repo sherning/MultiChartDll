@@ -8,10 +8,357 @@ using System.Collections.Generic;
 
 namespace PowerLanguage.Strategy
 {
-    #region Strategy - Price Pattern v20
+    #region Strategy - Price Pattern v21
 
     [IOGMode(IOGMode.Disabled)]
     public class __SherNing_PricePatterns : SignalObject
+    {
+        //=========================================================================================
+        // Name           : __SherNing_PricePatterns
+        // Description    : Price Action Patterns Framework
+        // Version        : v2.1
+        // Date Created   : 01 - Aug - 2020
+        // Time Taken     : 
+        // Remarks        : Protocol for starting and completing a project
+        //=========================================================================================
+        // Copyright      : 2020, Sher Ning Technologies           
+        // License        :      
+        //=========================================================================================
+
+        /*/
+         *----------------------------------------- Version ---------------------------------------
+         *  - Move most of the logic to TradeInfo 2.1
+         *  - Most recent version is the one without the version number
+         *----------------------------------------- Version ---------------------------------------
+           
+         *------------------------------------------ Notes ----------------------------------------
+         *------------------------------------------ Notes ----------------------------------------
+        /*/
+
+        // strategy inputs
+
+        public __SherNing_PricePatterns(object _ctx) : base(_ctx)
+        {
+
+        }
+
+        // reference fields 
+        PricePatternStrategy PricePattern;
+        VariableSeries<double> Pama1, Pama2, Pama3;
+        VariableSeries<int> MktPosition;
+        VariableSeries<EMarketPositionSide> MktDirection;
+        IOrderMarket LeMkt, SeMkt;
+        IOrderPriced LeStp, SeStp;
+        IOrderPriced LePft1, LePft2, SePft;
+
+        TradeInfo LeEntry;
+        VariableSeries<int> CurrentBars;
+
+        protected override void Create()
+        {
+            PricePattern = new PricePatternStrategy(this);
+            LeEntry = new TradeInfo(this);
+            CurrentBars = new VariableSeries<int>(this);
+
+            // entry
+            LeMkt = OrderCreator.MarketNextBar(new SOrderParameters(
+                Contracts.UserSpecified, "LE_Mkt", EOrderAction.Buy));
+
+            SeMkt = OrderCreator.MarketNextBar(new SOrderParameters(
+                Contracts.UserSpecified, "SE_Mkt", EOrderAction.SellShort));
+
+            // stop loss 
+            LeStp = OrderCreator.Stop(new SOrderParameters(
+                Contracts.Default, "LX_Stp", EOrderAction.Sell));
+
+            SeStp = OrderCreator.Stop(new SOrderParameters(
+                Contracts.Default, "SX_Stp", EOrderAction.BuyToCover));
+
+            // profit exit
+            LePft1 = OrderCreator.Limit(new SOrderParameters(
+                Contracts.UserSpecified, "LX_P1", EOrderAction.Sell));
+
+            LePft2 = OrderCreator.Limit(new SOrderParameters(
+            Contracts.UserSpecified, "LX_P2", EOrderAction.Sell));
+
+            SePft = OrderCreator.Limit(new SOrderParameters(
+                Contracts.Default, "SX_P1", EOrderAction.BuyToCover));
+
+            MktPosition = new VariableSeries<int>(this);
+            MktDirection = new VariableSeries<EMarketPositionSide>(this);
+
+            // clear output window
+            Output.Clear();
+        }
+
+        // value fields 
+        double OnePip;
+        protected override void StartCalc()
+        {
+            PricePattern._Length = 6;
+            PricePattern._Smooth = 10;
+            OnePip = (Bars.Info.BigPointValue / Bars.Info.PriceScale) * 10;
+        }
+
+        protected override void CalcBar()
+        {
+            // call strategy function on closing tick
+            if (Bars.Status == EBarState.Close) PricePattern.Call();
+
+            // keep track of market position
+            MktPosition.Value = StrategyInfo.MarketPosition;
+            MktDirection.Value = CurrentPosition.Side;
+
+            if (Bars.CurrentBar == 1)
+            {
+                // assign same reference location as function
+                Pama1 = PricePattern.Pama1;
+                Pama2 = PricePattern.Pama2;
+                Pama3 = PricePattern.Pama3;
+            }
+
+            SendEntryOrders();
+            SendExitOrders();
+            //Debug();
+        }
+
+        #region Send Order Command
+        DateTime CurrentTime;
+        private void Debug()
+        {
+            // debug market position and market direction
+            int barNum = 5342;
+            // to debug specific bar. use chart number - maxbarsback(50)
+
+            int maxBarsBack = ExecInfo.MaxBarsBack;
+            if (Bars.CurrentBar >= (barNum - maxBarsBack) && Bars.CurrentBar < (barNum - maxBarsBack + 10))
+            {
+                DateTime time = Bars.TimeValue;
+
+                if (time != CurrentTime)
+                {
+                    CurrentTime = time;
+                    Output.WriteLine("");
+                }
+
+                //Print("Bar Number: " + Bars.CurrentBar);
+                //Print("Entry Price: " + LeEntry.EntryPrice);
+                //Print("Stop Loss Price: " + LeEntry.StopLossPrice);
+
+
+                if (Bars.Status == EBarState.Open)
+                {
+                    Print("Bar Open");
+                    LeEntry.Debug();
+
+                }
+                if (Bars.Status == EBarState.Inside)
+                {
+                    Print("Bar Inside");
+
+                    LeEntry.Debug();
+
+                }
+                if (Bars.Status == EBarState.Close)
+                {
+                    Print("Bar Close");
+                    LeEntry.Debug();
+
+                }
+            }
+        }
+        private void Reset()
+        {
+
+        }
+        private void SendEntryOrders()
+        {
+            // send entry orders on closing tick
+            if (Bars.Status != EBarState.Close) return;
+
+            // long entry condition are valid
+            if (LeConditions() && LeEntry.SendEntry == false)
+            {
+                double close = Bars.Close[0];
+                double stop = CalcLowestLow(4);
+
+                LeEntry.EntryPrice = close;
+                LeEntry.StopLossPrice = stop - OnePip;
+                LeEntry.SendStopLoss = true;
+                LeEntry.ProfitPrice1 = close + ((close - stop) * 1);
+                LeEntry.SendProfit1 = true;
+                LeEntry.ProfitPrice2 = close + ((close - stop) * 2);
+                LeEntry.SendProfit2 = true;
+                LeEntry.Contracts = 100000;
+                LeEntry.ProfitQty1 = 50000;
+                LeEntry.ProfitQty2 = 50000;
+                LeMkt.Send(LeEntry.Contracts);
+                LeEntry.SendEntry = true;
+            }
+
+            //Debug();
+        }
+        private void SendExitOrders()
+        {
+            DateTime time = Bars.Time[0];
+
+            if (LeEntry.SendStopLoss)
+            {
+                LeStp.Send(LeEntry.StopLossPrice);
+
+                if (Bars.Status == EBarState.Close)
+                {
+                    ChartPoint p = new ChartPoint(time, LeEntry.StopLossPrice);
+                    ITextObject txt = DrwText.Create(p, "-");
+                    txt.Color = Color.Yellow;
+                }
+            }
+            if (LeEntry.SendProfit1)
+            {
+                LePft1.Send(LeEntry.ProfitPrice1, LeEntry.ProfitQty1);
+                if (Bars.Status == EBarState.Close)
+                {
+                    ChartPoint p = new ChartPoint(time, LeEntry.ProfitPrice1);
+                    ITextObject txt = DrwText.Create(p, "-");
+                    txt.Color = Color.Cyan;
+                }
+            }
+            if (LeEntry.SendProfit2)
+            {
+                LePft2.Send(LeEntry.ProfitPrice2, LeEntry.ProfitQty2);
+                if (Bars.Status == EBarState.Close)
+                {
+                    ChartPoint p = new ChartPoint(time, LeEntry.ProfitPrice2);
+                    ITextObject txt = DrwText.Create(p, "-");
+                    txt.Color = Color.Cyan;
+                }
+            }
+
+            // reset
+            //double close = Bars.Close[0];
+
+            if (Bars.Low[0] <= LeEntry.StopLossPrice)
+            {
+                LeEntry.SendProfit2 = LeEntry.SendProfit1 = LeEntry.SendStopLoss = false;
+                LeEntry.StopLossPrice = LeEntry.ProfitPrice1 = LeEntry.ProfitPrice2 = 0;
+                LeEntry.ProfitQty1 = LeEntry.ProfitQty2 = 0;
+                LeEntry.Contracts = 0;
+                LeEntry.EntryPrice = 0;
+                LeEntry.SendEntry = false;
+            }
+
+            if (Bars.High[0] >= LeEntry.ProfitPrice1 && Bars.High[0] >= LeEntry.ProfitPrice2)
+            {
+                LeEntry.SendProfit2 = LeEntry.SendProfit1 = LeEntry.SendStopLoss = false;
+                LeEntry.StopLossPrice = LeEntry.ProfitPrice1 = LeEntry.ProfitPrice2 = 0;
+                LeEntry.ProfitQty1 = LeEntry.ProfitQty2 = 0;
+                LeEntry.Contracts = 0;
+                LeEntry.EntryPrice = 0;
+                LeEntry.SendEntry = false;
+            }
+
+            else if (Bars.High[0] >= LeEntry.ProfitPrice1)
+            {
+                LeEntry.SendProfit1 = false;
+                LeEntry.ProfitPrice1 = 0;
+                LeEntry.ProfitQty1 = 0;
+            }
+
+            else if (Bars.High[0] >= LeEntry.ProfitPrice2)
+            {
+                LeEntry.SendProfit2 = false;
+                LeEntry.ProfitPrice2 = 0;
+                LeEntry.ProfitQty2 = 0;
+            }
+        }
+        #endregion
+
+        #region Strategy Conditions
+
+        public double CalcLowestLow(int bars)
+        {
+            // bars has to be 1 or greater
+            if (bars <= 0) return 0;
+
+            double low = double.MaxValue;
+
+            // get the ten bar high value
+            for (int i = 0; i < bars; i++)
+                low = Math.Min(low, Bars.Low[i]);
+
+            return low;
+        }
+        public double CalcHighestHigh(int bars)
+        {
+            // bars has to be 1 or greater
+            if (bars <= 0) return 0;
+
+            double high = 0;
+
+            // get the ten bar high value, include current high
+            for (int i = 0; i < bars; i++)
+                high = Math.Max(high, Bars.High[i]);
+
+            return high;
+        }
+        private bool LeConditions()
+        {
+            if (PamaBottom() && BarHighBreak(4))
+                return true;
+
+            return false;
+        }
+        private bool PamaBottom()
+        {
+            if (Pama1[0] > Pama1[1] && Pama1[1] < Pama1[2])
+                return true;
+
+            return false;
+        }
+        private bool PamaPeak()
+        {
+            if (Pama1[0] < Pama1[1] && Pama1[1] > Pama1[2])
+                return true;
+
+            return false;
+        }
+        private bool BarHighBreak(int bars)
+        {
+            double high = 0;
+
+            // get the ten bar high value, exclude current high
+            for (int i = 1; i <= bars; i++)
+                high = Math.Max(high, Bars.High[i]);
+
+            // if current close > 10 bar high, return true
+            return Bars.Close[0] > high;
+        }
+        #endregion
+
+        #region Print Functions
+        private bool DebugMode = true;
+        private void Print(string message)
+        {
+            // print messages if debug mode == true.
+            if (DebugMode == false) return;
+
+            // Print who is calling Print()
+            StackTrace stackTrace = new StackTrace();
+
+            Output.WriteLine("Project:  {0}   |   Caller:  {1}   |   Bar Time:  {2}   |   Message:  {3}",
+                Name,
+                stackTrace.GetFrame(1).GetMethod().Name,
+                Bars.TimeValue.ToString("dd-MM-yy HH:mm:ss tt"),
+                message);
+        }
+        #endregion
+    }
+
+    #endregion
+
+    #region Strategy - Price Pattern v20
+
+    public class __SherNing_PricePatterns_v20 : SignalObject
     {
         //=========================================================================================
         // Name           : __SherNing_PricePatterns
@@ -42,7 +389,7 @@ namespace PowerLanguage.Strategy
 
         // strategy inputs
 
-        public __SherNing_PricePatterns(object _ctx) : base(_ctx)
+        public __SherNing_PricePatterns_v20 (object _ctx) : base(_ctx)
         {
 
         }
@@ -613,8 +960,106 @@ namespace PowerLanguage.Strategy
 namespace PowerLanguage.Function
 {
 
-    #region Function - Trade Info v20
+    #region Function - Trade Info v21
     public sealed class TradeInfo : FunctionSeries<int>
+    {
+        //=========================================================================================
+        // Name           : Trade Info Function
+        // Description    : Store entry and exit information in a class
+        // Version        : v2.1
+        // Date Created   : 10 - Aug - 2020
+        // Time Taken     : 
+        // Remarks        : 
+        //=========================================================================================
+        // Copyright      : 2020, Sher Ning Technologies           
+        // License        :      
+        //=========================================================================================
+
+        /*/
+         *----------------------------------------- Version ---------------------------------------
+         *  - Test if it works with IOG
+         *  
+         *----------------------------------------- Version ---------------------------------------
+           
+         *------------------------------------------ Notes ----------------------------------------
+         *  - Design a strategy to have one entry, one stop and 3 profit targets
+         *------------------------------------------ Notes ----------------------------------------
+        /*/
+
+        // entry and stop properties
+        public double EntryPrice { get; set; }
+        public bool SendEntry { get; set; }
+
+        public int Contracts { get; set; }
+        public double StopLossPrice { get; set; }
+        public bool SendStopLoss { get; set; }
+
+        // profit 1 properties
+        public double ProfitPrice1 { get; set; }
+        public int ProfitQty1 { get; set; }
+        public bool SendProfit1 { get; set; }
+
+
+        // profit 2 properties
+        public double ProfitPrice2 { get; set; }
+        public int ProfitQty2 { get; set; }
+        public bool SendProfit2 { get; set; }
+
+        public TradeInfo(CStudyControl m) : base(m)
+        {
+        }
+
+        // fields - value types
+        protected override void StartCalc()
+        {
+        }
+
+        protected override int CalcBar()
+        {
+            return Contracts;
+        }
+
+        #region Debug
+        public void Debug()
+        {
+            Print("Send Entry: " + SendEntry);
+            Print("Entry Price: " + EntryPrice);
+            Print("Send Stop Loss: " + SendStopLoss);
+            Print("Stop Loss Price: " + StopLossPrice);
+            Print("Send Profit 1: " + SendProfit1);
+            Print("Profit Price 1: " + ProfitPrice1);
+            Print("Profit Qty 1: " + ProfitQty1);
+            Print("Send Profit 2: " + SendProfit2);
+            Print("Profit Price 2: " + ProfitPrice2);
+            Print("Profit Qty 2: " + ProfitQty2);
+            Print("Contracts: " + Contracts);
+            Output.WriteLine("");
+        }
+        #endregion
+        #region Print Functions
+        private bool DebugMode = true;
+        private void Print(string message)
+        {
+            // print messages if debug mode == true.
+            if (DebugMode == false) return;
+
+            // Print who is calling Print()
+            StackTrace stackTrace = new StackTrace();
+
+            Output.WriteLine("Project:  {0}   |   Caller:  {1}   |   Bar Time:  {2}   |   Message:  {3}",
+                Name,
+                stackTrace.GetFrame(1).GetMethod().Name,
+                Bars.TimeValue.ToString("dd-MM-yy HH:mm:ss tt"),
+                message);
+        }
+
+        #endregion
+    }
+
+    #endregion
+
+    #region Function - Trade Info v20
+    public sealed class TradeInfo_v20 : FunctionSeries<int>
     {
         //=========================================================================================
         // Name           : Trade Info Function
@@ -658,7 +1103,7 @@ namespace PowerLanguage.Function
         public int ProfitQty2 { get; set; }
         public bool SendProfit2 { get; set; }
 
-        public TradeInfo(CStudyControl m) : base(m)
+        public TradeInfo_v20 (CStudyControl m) : base(m)
         {
         }
 
