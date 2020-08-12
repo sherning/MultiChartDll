@@ -46,6 +46,7 @@ namespace PowerLanguage.Strategy
         VariableSeries<int> MktPosition;
         VariableSeries<EMarketPositionSide> MktDirection;
         IOrderMarket LeMkt, SeMkt;
+        IOrderPriced LeLmt, SeLmt;
         IOrderPriced LeStp, SeStp;
         IOrderPriced LePft1, LePft2, LePft3;
         IOrderPriced SePft1, SePft2, SePft3;
@@ -60,12 +61,19 @@ namespace PowerLanguage.Strategy
             SeEntry = new TradeInfo(this, EMarketPositionSide.Short, "SE_1");
             CurrentBars = new VariableSeries<int>(this);
 
-            // entry
+            // market entry
             LeMkt = OrderCreator.MarketNextBar(new SOrderParameters(
                 Contracts.UserSpecified, "LE_Mkt", EOrderAction.Buy));
 
             SeMkt = OrderCreator.MarketNextBar(new SOrderParameters(
                 Contracts.UserSpecified, "SE_Mkt", EOrderAction.SellShort));
+
+            // limit entry 
+            LeLmt = OrderCreator.Limit(new SOrderParameters(
+                Contracts.UserSpecified, "LE_Lmt", EOrderAction.Buy));
+
+            SeLmt = OrderCreator.Limit(new SOrderParameters(
+                Contracts.UserSpecified, "SE_Lmt", EOrderAction.SellShort));
 
             // stop loss 
             LeStp = OrderCreator.Stop(new SOrderParameters(
@@ -104,21 +112,23 @@ namespace PowerLanguage.Strategy
         // value fields 
         double OnePip;
         const int EnoughData = 1200;
+        bool LeLmtInForce, SeLmtInForce;
         protected override void StartCalc()
         {
             PricePattern._Length = 6;
             PricePattern._Smooth = 10;
             OnePip = (Bars.Info.BigPointValue / Bars.Info.PriceScale) * 10;
+            LeLmtInForce = SeLmtInForce = false;
 
             if (ShowPriceLevels)
             {
                 // display price lines
-                LeEntry.DisplayProfits = LeEntry.DisplayStopLoss = true;
+                LeEntry.DisplayEntry = LeEntry.DisplayProfits = LeEntry.DisplayStopLoss = true;
                 SeEntry.DisplayStopLoss = SeEntry.DisplayProfits = true;
             }
             else
             {
-                LeEntry.DisplayProfits = LeEntry.DisplayStopLoss = false;
+                LeEntry.DisplayEntry = LeEntry.DisplayProfits = LeEntry.DisplayStopLoss = false;
                 SeEntry.DisplayStopLoss = SeEntry.DisplayProfits = false;
             }
         }
@@ -143,10 +153,10 @@ namespace PowerLanguage.Strategy
             // ensure enought data
             if (Bars.CurrentBar > EnoughData)
             {
-                SendEntryOrders();
+                SendLmtEntry();
                 SendExitOrders();
             }
-          
+
             //Debug();
         }
 
@@ -177,51 +187,80 @@ namespace PowerLanguage.Strategy
                 if (Bars.Status == EBarState.Open)
                 {
                     Print("Bar Open");
-                    LeEntry.Debug();
+                    //LeEntry.Debug();
 
                 }
                 if (Bars.Status == EBarState.Inside)
                 {
                     Print("Bar Inside");
 
-                    LeEntry.Debug();
+                    //LeEntry.Debug();
 
                 }
                 if (Bars.Status == EBarState.Close)
                 {
                     Print("Bar Close");
-                    LeEntry.Debug();
+                    //LeEntry.Debug();
 
                 }
             }
         }
-        private void SendEntryOrders()
+        private void SendLmtEntry()
+        {
+            // for limit order cannot send at close, it will not work
+            double open = CalcLowestLow(4) - OnePip;
+            double stop = CalcLowestLow(4) - (OnePip * 10);
+
+            // if conditions are okay. send limit order, what happens if a new condition occurs ?
+            if (LeConditions() && LeEntry.SendEntry == false && LeEntry.IsEntryOrderFilled == false)
+            {
+                // setup entry and exit properties
+                LeEntry.SetLmtEntry(open, 100000, 100);
+                LeEntry.SetStopLoss(stop - OnePip, true);
+                LeEntry.SetProfitTarget(1, 30000, 1, true);
+                LeEntry.SetProfitTarget(2, 40000, 1.5, true);
+                LeEntry.SetProfitTarget(3, 30000, 2, true);
+            }
+
+            // function calcbar will do the settle the logic to decide to send order
+            LeEntry.Call();
+
+            // if entry conditions are right, send order
+            if (LeEntry.SendEntry) LeLmt.Send(LeEntry.EntryPrice, LeEntry.Contracts);
+        }
+        private void SendMktEntry()
         {
             // send entry orders on closing tick
             if (Bars.Status != EBarState.Close) return;
 
             // long entry condition are valid
-            if (LeConditions() && LeEntry.SendEntry == false && SeEntry.SendEntry == false)
+            if (LeConditions() && LeEntry.IsEntryOrderFilled == false && SeEntry.IsEntryOrderFilled == false)
             {
                 double close = Bars.Close[0];
                 double stop = CalcLowestLow(4);
 
-                LeEntry.SetEntryAndStopLoss(close, stop - OnePip, 100000);
-                LeEntry.CalcNSetProfitPrice(1, 30000, 1);
-                LeEntry.CalcNSetProfitPrice(2, 40000, 1.5);
-                LeEntry.CalcNSetProfitPrice(3, 30000, 2);
+                // set stop loss, separate from entry order, sendentryorder() for entry info
+                LeEntry.SetMktEntry(close, 100000);
+                LeEntry.SetStopLoss(stop - OnePip, false);
+                LeEntry.SetProfitTarget(1, 30000, 1);
+                LeEntry.SetProfitTarget(2, 40000, 1.5);
+                LeEntry.SetProfitTarget(3, 30000, 2);
+
+                // send mkt always returns true, or change to SendEntryOrder()
                 LeMkt.Send(LeEntry.Contracts);
             }
 
-            if (SeConditions() && SeEntry.SendEntry == false && LeEntry.SendEntry == false)
+            if (SeConditions() && SeEntry.IsEntryOrderFilled == false && LeEntry.IsEntryOrderFilled == false)
             {
                 double close = Bars.Close[0];
                 double stop = CalcHighestHigh(4);
 
-                SeEntry.SetEntryAndStopLoss(close, stop + OnePip, 100000);
-                SeEntry.CalcNSetProfitPrice(1, 30000, 1);
-                SeEntry.CalcNSetProfitPrice(2, 40000, 1.5);
-                SeEntry.CalcNSetProfitPrice(3, 30000, 2);
+                SeEntry.SetMktEntry(close, 100000);
+                SeEntry.SetStopLoss(stop + OnePip, false);
+                SeEntry.SetProfitTarget(1, 30000, 1);
+                SeEntry.SetProfitTarget(2, 40000, 1.5);
+                SeEntry.SetProfitTarget(3, 30000, 2);
+
                 SeMkt.Send(SeEntry.Contracts);
             }
 
@@ -1368,10 +1407,14 @@ namespace PowerLanguage.Function
 
         /*/
          *----------------------------------------- Version ---------------------------------------
-         * -
+         * - OCO and OSO entry and exit orders
+         * - StopLimit Orders, Limit Orders, MarketOrders
+         * - Refactor TradeOrder
+         * - Rename keep logic components
          *----------------------------------------- Version ---------------------------------------
            
          *------------------------------------------ Notes ----------------------------------------
+         * - this is designed for single entry point with multi exits
          *------------------------------------------ Notes ----------------------------------------
         /*/
 
@@ -1381,7 +1424,11 @@ namespace PowerLanguage.Function
 
         // entry and stop properties
         public double EntryPrice { get; set; }
+        public double LimitPrice { get; set; }
+        public double StopPrice { get; set; }
+        public bool IsEntryOrderFilled { get; private set; }
         public bool SendEntry { get; private set; }
+        public int TimeInForce { get; private set; }
         public int Contracts { get; set; }
 
         // stop loss properties
@@ -1405,6 +1452,7 @@ namespace PowerLanguage.Function
         public bool SendProfit3 { get; private set; }
 
         // display properties
+        public bool DisplayEntry { private get; set; }
         public bool DisplayStopLoss { private get; set; }
         public bool DisplayProfits { private get; set; }
 
@@ -1418,7 +1466,58 @@ namespace PowerLanguage.Function
         // fields - value types
         int Displace;
         double OnePip;
-        bool StopLossTxt, ProfitTxt1, ProfitTxt2, ProfitTxt3;
+        bool EntryTxt, StopLossTxt, ProfitTxt1, ProfitTxt2, ProfitTxt3;
+        bool SetEntryOnce, SetStopLossOnce, SetProfit1Once, SetProfit2Once, SetProfit3Once;
+
+        private void ResetTrade()
+        {
+            // position reset method below fields for easier reference
+            ResetEntry();
+            ResetExit();
+        }
+
+        private void ResetEntry()
+        {
+            // reset entry data
+            EntryPrice = LimitPrice = StopPrice = 0;
+
+            // reset profit flags
+            SetProfit1Once = SetProfit2Once = SetProfit3Once = false;
+
+            // reset entry and stop loss flags
+            SetEntryOnce = SetStopLossOnce = false;
+
+            // entry text
+            EntryTxt = false;
+
+            // reset flag to trigger Send()
+            SendEntry = false;
+
+            // reset time in force, max 999 bars only
+            TimeInForce = 0;
+        }
+
+        private void ResetExit()
+        {
+            // reset stoploss 
+            StopLossPrice = 0;
+
+            // reset profit prices
+            ProfitPrice1 = ProfitPrice2 = ProfitPrice3 = 0;
+
+            // reset entry order flag
+            IsEntryOrderFilled = false;
+
+            // reset stop and profits flags which triggers Send()
+            SendStopLoss = SendProfit1 = SendProfit2 = SendProfit3 = false;
+
+            // reset contracts and exit quantity
+            Contracts = ProfitQty1 = ProfitQty2 = ProfitQty3 = 0;
+
+            // reset txt flags that plot exit txt
+            StopLossTxt = ProfitTxt1 = ProfitTxt2 = ProfitTxt3 = false;
+        }
+
         protected override void StartCalc()
         {
             // one pip = 10 ticks
@@ -1431,26 +1530,17 @@ namespace PowerLanguage.Function
             ResetTrade();
         }
 
-        private void ResetTrade()
-        {
-            EntryPrice = StopLossPrice = 0;
-            ProfitPrice1 = ProfitPrice2 = ProfitPrice3 = 0;
-            SendEntry = SendStopLoss = false;
-            SendProfit1 = SendProfit2 = SendProfit3 = false;
-            Contracts = ProfitQty1 = ProfitQty2 = ProfitQty3 = 0;
-            StopLossTxt = ProfitTxt1 = ProfitTxt2 = ProfitTxt3 = false;
-        }
-
         protected override int CalcBar()
         {
             switch (TradeDirection)
             {
                 case EMarketPositionSide.Long:
-                    LongExit();
+                    LeOrderSendOrder();
+                    LxOrderSendOrder();
                     break;
 
                 case EMarketPositionSide.Short:
-                    ShortExit();
+                    SxOrderSendOrder();
                     break;
 
                 // Do nothing
@@ -1462,10 +1552,75 @@ namespace PowerLanguage.Function
             return Contracts;
         }
 
-        #region Function Logic
-        private void LongExit()
+        #region entry order logic
+        DateTime CurrentTime;
+        private void LeOrderSendOrder()
         {
-            if (SendEntry)
+            // entry order has not been filled
+            if (IsEntryOrderFilled == false)
+            {
+                bool closingTick = Bars.Status == EBarState.Close;
+                bool optimizing = Environment.Optimizing;
+                DateTime time = Bars.Time[0];
+
+                // limit order entry is true, and 
+                if (LimitPrice > 0 && StopPrice <= 0)
+                {
+                    EntryPrice = LimitPrice;
+
+                    // limit order filled
+                    if (Bars.Low[0] <= EntryPrice)
+                    {
+                        IsEntryOrderFilled = true;
+                        ResetEntry();
+                        return;
+                    }
+
+                    // else, display the entry order line
+                    else
+                    {
+                        SendEntry = true;
+
+                        // display entry price on closing tick when not optimizing
+                        if (DisplayEntry && closingTick && !optimizing)
+                        {
+                            ChartPoint p = new ChartPoint(Bars.Time[0], EntryPrice);
+                            ITextObject txt = DrwText.Create(p, "-");
+                            txt.Color = Color.LimeGreen;
+
+                            if (EntryTxt == false)
+                            {
+                                ChartPoint pt = new ChartPoint(
+                                    Bars.FullSymbolData.Time[-1], EntryPrice + (Displace * OnePip));
+                                ITextObject text = DrwText.Create(pt, "LMT");
+                                text.Color = Color.LimeGreen;
+                                EntryTxt = true;
+                            }
+                        }
+
+                        // time in force, once per bar, regardless how many time calcbar is called
+                        if (time != CurrentTime)
+                        {
+                            CurrentTime = time;
+                            TimeInForce--;
+                        }
+                    }
+
+                    // time in force for limit order
+                    if (TimeInForce == 1) ResetTrade();
+                }
+            }
+
+            // debug from 
+            Debug(10704, 10708);
+        }
+        #endregion
+
+        #region exit order logic
+        private void LxOrderSendOrder()
+        {
+            // for exit, this must be true
+            if (IsEntryOrderFilled)
             {
                 if (StopLossPrice > 0 && Contracts > 0) SendStopLoss = true;
                 else SendStopLoss = false;
@@ -1628,9 +1783,9 @@ namespace PowerLanguage.Function
                 return;
             }
         }
-        private void ShortExit()
+        private void SxOrderSendOrder()
         {
-            if (SendEntry)
+            if (IsEntryOrderFilled)
             {
                 if (StopLossPrice > 0 && Contracts > 0) SendStopLoss = true;
                 else SendStopLoss = false;
@@ -1824,31 +1979,7 @@ namespace PowerLanguage.Function
             return profitPrice;
         }
 
-        /// <summary>
-        /// Set profit price directly to a specific profit exit, based on risk reward
-        /// </summary>
-        /// <param name="riskReward"></param>
-        /// <param name="target"></param>
-        /// <returns></returns>
-        public void CalcNSetProfitPrice(int target, int quantity, double riskReward)
-        {
-            double risk, profitPrice = 0;
 
-            // both entry price and stop loss price are valid
-            if (EntryPrice <= 0 && StopLossPrice <= 0) return;
-
-            risk = Math.Abs(EntryPrice - StopLossPrice);
-
-            // long entry
-            if (TradeDirection == EMarketPositionSide.Long)
-                profitPrice = EntryPrice + (risk * riskReward);
-
-            // short entry
-            else if (TradeDirection == EMarketPositionSide.Short)
-                profitPrice = EntryPrice - (risk * riskReward);
-
-            SetProfitTarget(target, profitPrice, quantity);
-        }
 
 
         /// <summary>
@@ -1904,13 +2035,46 @@ namespace PowerLanguage.Function
         #endregion
 
         #region Set Properties
-        /// <summary>
-        /// Set profit price and exit quantity for each target manually
-        /// </summary>
-        /// <param name="price"></param>
-        /// <param name="quantity"></param>
-        /// <param name="target"></param>
-        public void SetProfitTarget(int target, double price, int quantity)
+      
+        public void SetProfitTarget(int target, int quantity, double riskReward)
+        {
+            double risk, profitPrice = 0;
+
+            // both entry price and stop loss price are valid
+            if (EntryPrice <= 0 && StopLossPrice <= 0) return;
+
+            risk = Math.Abs(EntryPrice - StopLossPrice);
+
+            // long entry
+            if (TradeDirection == EMarketPositionSide.Long)
+                profitPrice = EntryPrice + (risk * riskReward);
+
+            // short entry
+            else if (TradeDirection == EMarketPositionSide.Short)
+                profitPrice = EntryPrice - (risk * riskReward);
+
+            SetProfitPrice(target, profitPrice, quantity);
+        }
+        public void SetProfitTarget(int target, int quantity, double riskReward, bool once)
+        {
+            double risk, profitPrice = 0;
+
+            // both entry price and stop loss price are valid
+            if (EntryPrice <= 0 && StopLossPrice <= 0) return;
+
+            risk = Math.Abs(EntryPrice - StopLossPrice);
+
+            // long entry
+            if (TradeDirection == EMarketPositionSide.Long)
+                profitPrice = EntryPrice + (risk * riskReward);
+
+            // short entry
+            else if (TradeDirection == EMarketPositionSide.Short)
+                profitPrice = EntryPrice - (risk * riskReward);
+
+            SetProfitPrice(target, profitPrice, quantity, once);
+        }
+        public void SetProfitPrice(int target, double price, int quantity)
         {
             switch (target)
             {
@@ -1936,39 +2100,109 @@ namespace PowerLanguage.Function
                     break;
             }
         }
-        /// <summary>
-        /// Set entry price, stop price and contracts
-        /// </summary>
-        /// <param name="entry"></param>
-        /// <param name="stoploss"></param>
-        /// <param name="contracts"></param>
-        public void SetEntryAndStopLoss(double entry, double stoploss, int contracts)
+        public void SetProfitPrice(int target, double price, int quantity, bool once)
+        {
+            switch (target)
+            {
+                // profit target 1
+                case 1:
+                    if (once && SetProfit1Once == false)
+                    {
+                        ProfitPrice1 = price;
+                        ProfitQty1 = quantity;
+                        SetProfit1Once = true;
+                    }
+                    break;
+
+                // profit target 2
+                case 2:
+                    if (once && SetProfit2Once == false)
+                    {
+                        ProfitPrice2 = price;
+                        ProfitQty2 = quantity;
+                        SetProfit2Once = true;
+                    }
+                    break;
+
+                // profit target 3
+                case 3:
+                    if (once && SetProfit3Once == false)
+                    {
+                        ProfitPrice3 = price;
+                        ProfitQty3 = quantity;
+                        SetProfit3Once = true;
+                    }
+                    break;
+
+                default:
+                    break;
+            }
+        }
+        public void SetMktEntry(double entry, int contracts)
         {
             EntryPrice = entry;
             Contracts = contracts;
-            StopLossPrice = stoploss;
-            SendEntry = true;
+            IsEntryOrderFilled = true;
         }
+        public void SetStopLoss(double stoploss, bool once)
+        {
+            // set stop loss price only once
+            if (once && SetStopLossOnce == false)
+            {
+                StopLossPrice = stoploss;
+                SetStopLossOnce = true;
+            }
+            else
+            {
+                StopLossPrice = stoploss;
+            }
+        }
+        public void SetLmtEntry(double limitPrice, int contracts, int timeInForce = 999)
+        {
+            // do this only once
+            if (SetEntryOnce == false)
+            {
+                LimitPrice = EntryPrice = limitPrice;
+                Contracts = contracts;
+                TimeInForce = timeInForce;
+                SetEntryOnce = true;
+                IsEntryOrderFilled = false;
+            }
+        }
+
         #endregion
 
         #region Debug
-        public void Debug()
+        public void Debug(int start, int end)
         {
-            Print("Send Entry: " + SendEntry);
-            Print("Entry Price: " + EntryPrice);
-            Print("Send Stop Loss: " + SendStopLoss);
-            Print("Stop Loss Price: " + StopLossPrice);
-            Print("Send Profit 1: " + SendProfit1);
-            Print("Profit Price 1: " + ProfitPrice1);
-            Print("Profit Qty 1: " + ProfitQty1);
-            Print("Send Profit 2: " + SendProfit2);
-            Print("Profit Price 2: " + ProfitPrice2);
-            Print("Profit Qty 2: " + ProfitQty2);
-            Print("Send Profit 3: " + SendProfit3);
-            Print("Profit Price 3: " + ProfitPrice3);
-            Print("Profit Qty 3: " + ProfitQty3);
-            Print("Contracts: " + Contracts);
-            Output.WriteLine("");
+            int maxBars = ExecInfo.MaxBarsBack;
+            start -= maxBars;
+            end -= maxBars;
+
+            if (Bars.CurrentBar >= start && Bars.CurrentBar <= end)
+            {
+                Print("Chart Bar Number: " + (Bars.CurrentBar + maxBars));
+                Print("Bar Status: " + Bars.Status);
+                Print("Time in Force: " + TimeInForce);
+                Print("Entry Order Filled: " + IsEntryOrderFilled);
+                Print("Send Entry Order: " + SendEntry);
+                Print("Entry Price: " + EntryPrice);
+                Print("Stop Price: " + StopPrice);
+                Print("Limit Price: " + LimitPrice);
+                Print("Send Stop Loss: " + SendStopLoss);
+                Print("Stop Loss Price: " + StopLossPrice);
+                Print("Send Profit 1: " + SendProfit1);
+                Print("Profit Price 1: " + ProfitPrice1);
+                Print("Profit Qty 1: " + ProfitQty1);
+                Print("Send Profit 2: " + SendProfit2);
+                Print("Profit Price 2: " + ProfitPrice2);
+                Print("Profit Qty 2: " + ProfitQty2);
+                Print("Send Profit 3: " + SendProfit3);
+                Print("Profit Price 3: " + ProfitPrice3);
+                Print("Profit Qty 3: " + ProfitQty3);
+                Print("Contracts: " + Contracts);
+                Output.WriteLine("");
+            }
         }
         #endregion
 
@@ -2055,7 +2289,7 @@ namespace PowerLanguage.Function
         public bool DisplayStopLoss { private get; set; }
         public bool DisplayProfits { private get; set; }
 
-        public TradeInfo_v21 (CStudyControl m, EMarketPositionSide direction, string entryName)
+        public TradeInfo_v21(CStudyControl m, EMarketPositionSide direction, string entryName)
             : base(m)
         {
             TradeDirection = direction;
