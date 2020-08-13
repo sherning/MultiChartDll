@@ -29,8 +29,10 @@ namespace PowerLanguage.Strategy
 
         /*/
          *--------------------------------------- Objectives --------------------------------------
-         *  1. Test Limit Entry and Exits - Successful
-         *  2. Test Market Entry and Exits - In process
+         *  3.1.1 Test Limit Entries with Exits - Successful
+         *  3.1.2 Test Market Entries with Exits - Succssful
+         *  3.1.3 Test Stop Entries with Exits - Successful
+         *  3.1.4 Test Stop Limit Entries
          *--------------------------------------- Objectives --------------------------------------
            
          *---------------------------------------- Versions ---------------------------------------
@@ -225,9 +227,12 @@ namespace PowerLanguage.Strategy
             double entryPrice = CalcHighestHigh(4) + (OnePip * 10);
             double stopPrice = CalcLowestLow(4) - OnePip;
 
+            // long conditions
             if (LeConditions() 
                 && LeEntry.SendEntry == false 
-                && LeEntry.IsEntryOrderFilled == false)
+                && LeEntry.IsEntryOrderFilled == false
+                && SeEntry.SendEntry == false
+                && SeEntry.IsEntryOrderFilled == false)
             {
                 LeEntry.SetStpEntry(entryPrice, 100000, 100);
                 LeEntry.SetStopLoss(stopPrice - OnePip, true);
@@ -239,6 +244,27 @@ namespace PowerLanguage.Strategy
             LeEntry.Call();
 
             if (LeEntry.SendEntry) LeStp.Send(LeEntry.StopPrice, LeEntry.Contracts);
+
+            // short conditions
+            entryPrice = CalcLowestLow(4) - (OnePip * 10);
+            stopPrice = CalcHighestHigh(4) + OnePip;
+
+            if (SeConditions()
+                && SeEntry.SendEntry == false
+                && SeEntry.IsEntryOrderFilled == false
+                && LeEntry.SendEntry == false
+                && LeEntry.IsEntryOrderFilled == false)
+            {
+                SeEntry.SetStpEntry(entryPrice, 100000, 100);
+                SeEntry.SetStopLoss(stopPrice + OnePip, true);
+                SeEntry.SetProfitTarget(1, 30000, 1, true);
+                SeEntry.SetProfitTarget(2, 40000, 1.5, true);
+                SeEntry.SetProfitTarget(3, 30000, 2, true);
+            }
+
+            SeEntry.Call();
+
+            if (SeEntry.SendEntry) SeStp.Send(SeEntry.StopPrice, SeEntry.Contracts);
         }
         private void SendLmtEntry()
         {
@@ -1884,8 +1910,8 @@ namespace PowerLanguage.Function
          *--------------------------------------- Objectives --------------------------------------
          *  3.1.1 complete long limit order entry debugging and refactorization - Successful
          *  3.1.2 complete short limit order entry, updated new IOG Mode - Successful
-         *  3.1.3 add long stop order entry 
-         *  3.1.4 add short stop order entry
+         *  3.1.3 add long stop order entry - Successful
+         *  3.1.4 add short stop order entry - Successful
          *  3.1.5 add stop entry and stop limit entry
          *  3.1.6 add double stop entry
          *--------------------------------------- Objectives --------------------------------------
@@ -1946,14 +1972,12 @@ namespace PowerLanguage.Function
         double OnePip;
         bool EntryTxt, StopLossTxt, ProfitTxt1, ProfitTxt2, ProfitTxt3;
         bool SetEntryOnce, SetStopLossOnce, SetProfit1Once, SetProfit2Once, SetProfit3Once;
-
         private void ResetTrade()
         {
             // position reset method below fields for easier reference
             ResetEntry();
             ResetExit();
         }
-
         private void ResetEntry()
         {
             // reset entry data
@@ -1974,7 +1998,6 @@ namespace PowerLanguage.Function
             // reset time in force, max 999 bars only
             TimeInForce = 0;
         }
-
         private void ResetExit()
         {
             // reset stoploss 
@@ -1995,7 +2018,6 @@ namespace PowerLanguage.Function
             // reset txt flags that plot exit txt
             StopLossTxt = ProfitTxt1 = ProfitTxt2 = ProfitTxt3 = false;
         }
-
         protected override void StartCalc()
         {
             // one pip = 10 ticks
@@ -2007,7 +2029,6 @@ namespace PowerLanguage.Function
             // reset
             ResetTrade();
         }
-
         protected override int CalcBar()
         {
             switch (TradeDirection)
@@ -2153,7 +2174,7 @@ namespace PowerLanguage.Function
                 bool optimizing = Environment.Optimizing;
                 DateTime time = Bars.Time[0];
 
-                // limit order entry is true, and 
+                // limit order entry
                 if (LimitPrice > 0 && StopPrice <= 0)
                 {
                     EntryPrice = LimitPrice;
@@ -2200,6 +2221,55 @@ namespace PowerLanguage.Function
                     // time in force for limit order
                     if (TimeInForce == 1) ResetTrade();
                 }
+
+                // stop order entry
+                if (StopPrice > 0 && LimitPrice <= 0)
+                {
+                    EntryPrice = StopPrice;
+
+                    // short limit order filled
+                    if (Bars.Low[0] <= EntryPrice)
+                    {
+                        IsEntryOrderFilled = true;
+                        ResetEntry();
+                        return;
+                    }
+
+                    // else, display the entry order line
+                    else
+                    {
+                        SendEntry = true;
+
+                        // display entry price on closing tick when not optimizing
+                        if (DisplayEntry && closingTick && !optimizing)
+                        {
+                            ChartPoint p = new ChartPoint(Bars.Time[0], EntryPrice);
+                            ITextObject txt = DrwText.Create(p, "-");
+                            txt.Color = Color.DarkRed;
+
+                            if (EntryTxt == false)
+                            {
+                                ChartPoint pt = new ChartPoint(
+                                    Bars.FullSymbolData.Time[-1], EntryPrice + (Displace * OnePip));
+                                ITextObject text = DrwText.Create(pt, "SE");
+                                text.Color = Color.DarkRed;
+                                EntryTxt = true;
+                            }
+                        }
+
+                        // time in force, once per bar, regardless how many time calcbar is called
+                        if (time != CurrentTime)
+                        {
+                            // this is equivalent to opening tick, but called only once
+                            CurrentTime = time;
+                            TimeInForce--;
+                        }
+                    }
+
+                    // time in force for limit order
+                    if (TimeInForce == 1) ResetTrade();
+                }
+
             }
 
             // debug from 
