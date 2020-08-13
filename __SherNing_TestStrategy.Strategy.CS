@@ -117,6 +117,7 @@ namespace PowerLanguage.Strategy
             Output.WriteLine(""); 
         }
         #endregion
+
         #region Print Functions
         private bool DebugMode = true;
         private void Print(string message)
