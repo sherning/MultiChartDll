@@ -16,12 +16,12 @@ namespace PowerLanguage.Strategy
         // Project Name : Price Patterns
         // Description  : Order Execution Test Framework
         // Type         : Strategy
-        // Version      : v3.0
-        // Date         : 12 - Aug - 2020
+        // Version      : v3.1
+        // Date         : 13 - Aug - 2020
         // Time Taken   : 
-        // Remarks      : Protocol for starting and completing a project
+        // Remarks      : 
         //=========================================================================================
-        // Copyright    : 2020, Sher Ning Technologies           
+        // Copyright    : 2020, Sher Ning Quantitative Technologies           
         // License      : Nil
         // Client       : Nil
         // Details      : sherning@hotmail.com
@@ -59,8 +59,8 @@ namespace PowerLanguage.Strategy
         protected override void Create()
         {
             PricePattern = new PricePatternStrategy(this);
-            LeEntry = new TradeInfo(this, EMarketPositionSide.Long, "LE_1");
-            SeEntry = new TradeInfo(this, EMarketPositionSide.Short, "SE_1");
+            LeEntry = new TradeInfo(this, EMarketPositionSide.Long, IOGMode.Enabled, "LE_1");
+            SeEntry = new TradeInfo(this, EMarketPositionSide.Short, IOGMode.Enabled, "SE_1");
             CurrentBars = new VariableSeries<int>(this);
 
             // market entry
@@ -126,12 +126,12 @@ namespace PowerLanguage.Strategy
             {
                 // display price lines
                 LeEntry.DisplayEntry = LeEntry.DisplayProfits = LeEntry.DisplayStopLoss = true;
-                SeEntry.DisplayStopLoss = SeEntry.DisplayProfits = true;
+                SeEntry.DisplayEntry = SeEntry.DisplayStopLoss = SeEntry.DisplayProfits = true;
             }
             else
             {
                 LeEntry.DisplayEntry = LeEntry.DisplayProfits = LeEntry.DisplayStopLoss = false;
-                SeEntry.DisplayStopLoss = SeEntry.DisplayProfits = false;
+                SeEntry.DisplayEntry = SeEntry.DisplayStopLoss = SeEntry.DisplayProfits = false;
             }
         }
 
@@ -210,15 +210,19 @@ namespace PowerLanguage.Strategy
         private void SendLmtEntry()
         {
             // for limit order cannot send at close, it will not work
-            double open = CalcLowestLow(4) - OnePip;
-            double stop = CalcLowestLow(4) - (OnePip * 10);
+            double lePrice = CalcLowestLow(4) - OnePip;
+            double leStop = CalcLowestLow(4) - (OnePip * 10);
 
             // if conditions are okay. send limit order, what happens if a new condition occurs ?
-            if (LeConditions() && LeEntry.SendEntry == false && LeEntry.IsEntryOrderFilled == false)
+            if (LeConditions() && 
+                LeEntry.SendEntry == false && 
+                LeEntry.IsEntryOrderFilled == false && 
+                SeEntry.IsEntryOrderFilled == false &&
+                SeEntry.SendEntry == false)
             {
                 // setup entry and exit properties
-                LeEntry.SetLmtEntry(open, 100000, 100);
-                LeEntry.SetStopLoss(stop - OnePip, true);
+                LeEntry.SetLmtEntry(lePrice, 100000, 100);
+                LeEntry.SetStopLoss(leStop - OnePip, true);
                 LeEntry.SetProfitTarget(1, 30000, 1, true);
                 LeEntry.SetProfitTarget(2, 40000, 1.5, true);
                 LeEntry.SetProfitTarget(3, 30000, 2, true);
@@ -229,6 +233,28 @@ namespace PowerLanguage.Strategy
 
             // if entry conditions are right, send order
             if (LeEntry.SendEntry) LeLmt.Send(LeEntry.EntryPrice, LeEntry.Contracts);
+
+            double sePrice = CalcHighestHigh(4) + OnePip;
+            double seStop = CalcHighestHigh(4) + (OnePip * 10);
+
+            // conditions check
+            if (SeConditions() && 
+                !SeEntry.SendEntry && 
+                !SeEntry.IsEntryOrderFilled && 
+                !LeEntry.IsEntryOrderFilled &&
+                !LeEntry.SendEntry)
+            {
+                // setup entry and exit properties
+                SeEntry.SetLmtEntry(sePrice, 100000, 100);
+                SeEntry.SetStopLoss(seStop + OnePip, true);
+                SeEntry.SetProfitTarget(1, 30000, 1, true);
+                SeEntry.SetProfitTarget(2, 40000, 1.5, true);
+                SeEntry.SetProfitTarget(3, 30000, 2, true);
+            }
+
+            SeEntry.Call();
+
+            if (SeEntry.SendEntry) SeLmt.Send(SeEntry.LimitPrice, SeEntry.Contracts);
         }
         private void SendMktEntry()
         {
@@ -1815,7 +1841,7 @@ namespace PowerLanguage.Function
         // Time Taken   : 
         // Remarks      : 
         //=========================================================================================
-        // Copyright    : 2020, Sher Ning Technologies           
+        // Copyright    : 2020, Sher Ning Quantitative Technologies           
         // License      : Nil
         // Client       : Nil
         // Details      : sherning@hotmail.com
@@ -1823,10 +1849,9 @@ namespace PowerLanguage.Function
 
         /*/
          *--------------------------------------- Objectives --------------------------------------
-         *  3.1.1 complete long limit order entry debug
-         *  3.1.2 re-factor limit entry
-         *  3.1.3 complete short limit order entry
-         *  3.1.4 add stop entry and stop limit entry
+         *  3.1.1 complete long limit order entry debugging and refactorization
+         *  3.1.2 complete short limit order entry, updated new IOG Mode
+         *  3.1.3 add stop entry and stop limit entry
          *--------------------------------------- Objectives --------------------------------------
            
          *---------------------------------------- Versions ---------------------------------------
@@ -1836,6 +1861,7 @@ namespace PowerLanguage.Function
         // trade properties
         public string EntryName { get; private set; }
         public EMarketPositionSide TradeDirection { get; private set; }
+        public IOGMode IOGMode { get; private set; }
 
         // entry and stop properties
         public double EntryPrice { get; set; }
@@ -1871,11 +1897,12 @@ namespace PowerLanguage.Function
         public bool DisplayStopLoss { private get; set; }
         public bool DisplayProfits { private get; set; }
 
-        public TradeInfo(CStudyControl m, EMarketPositionSide direction, string entryName)
+        public TradeInfo(CStudyControl m, EMarketPositionSide direction, IOGMode mode, string entryName)
             : base(m)
         {
             TradeDirection = direction;
             EntryName = entryName;
+            IOGMode = mode;
         }
 
         // fields - value types
@@ -1950,12 +1977,13 @@ namespace PowerLanguage.Function
             switch (TradeDirection)
             {
                 case EMarketPositionSide.Long:
-                    LeOrderSendOrder();
-                    LxOrderSendOrder();
+                    LongEntry();
+                    LongExit();
                     break;
 
                 case EMarketPositionSide.Short:
-                    SxOrderSendOrder();
+                    ShortEntry();
+                    ShortExit();
                     break;
 
                 // Do nothing
@@ -1967,9 +1995,9 @@ namespace PowerLanguage.Function
             return Contracts;
         }
 
-        #region entry order logic
+        #region Entry Order Logic
         DateTime CurrentTime;
-        private void LeOrderSendOrder()
+        private void LongEntry()
         {
             // entry order has not been filled
             if (IsEntryOrderFilled == false)
@@ -2007,7 +2035,7 @@ namespace PowerLanguage.Function
                             {
                                 ChartPoint pt = new ChartPoint(
                                     Bars.FullSymbolData.Time[-1], EntryPrice + (Displace * OnePip));
-                                ITextObject text = DrwText.Create(pt, "LMT");
+                                ITextObject text = DrwText.Create(pt, "LE");
                                 text.Color = Color.LimeGreen;
                                 EntryTxt = true;
                             }
@@ -2016,6 +2044,7 @@ namespace PowerLanguage.Function
                         // time in force, once per bar, regardless how many time calcbar is called
                         if (time != CurrentTime)
                         {
+                            // this is equivalent to opening tick, but called only once
                             CurrentTime = time;
                             TimeInForce--;
                         }
@@ -2027,12 +2056,74 @@ namespace PowerLanguage.Function
             }
 
             // debug from 
-            Debug(10704, 10708);
+            // Debug(10704, 10708);
         }
+        private void ShortEntry()
+        {
+            // entry order has not been filled
+            if (IsEntryOrderFilled == false)
+            {
+                bool closingTick = Bars.Status == EBarState.Close;
+                bool optimizing = Environment.Optimizing;
+                DateTime time = Bars.Time[0];
+
+                // limit order entry is true, and 
+                if (LimitPrice > 0 && StopPrice <= 0)
+                {
+                    EntryPrice = LimitPrice;
+
+                    // short limit order filled
+                    if (Bars.High[0] >= EntryPrice)
+                    {
+                        IsEntryOrderFilled = true;
+                        ResetEntry();
+                        return;
+                    }
+
+                    // else, display the entry order line
+                    else
+                    {
+                        SendEntry = true;
+
+                        // display entry price on closing tick when not optimizing
+                        if (DisplayEntry && closingTick && !optimizing)
+                        {
+                            ChartPoint p = new ChartPoint(Bars.Time[0], EntryPrice);
+                            ITextObject txt = DrwText.Create(p, "-");
+                            txt.Color = Color.Red;
+
+                            if (EntryTxt == false)
+                            {
+                                ChartPoint pt = new ChartPoint(
+                                    Bars.FullSymbolData.Time[-1], EntryPrice + (Displace * OnePip));
+                                ITextObject text = DrwText.Create(pt, "SE");
+                                text.Color = Color.Red;
+                                EntryTxt = true;
+                            }
+                        }
+
+                        // time in force, once per bar, regardless how many time calcbar is called
+                        if (time != CurrentTime)
+                        {
+                            // this is equivalent to opening tick, but called only once
+                            CurrentTime = time;
+                            TimeInForce--;
+                        }
+                    }
+
+                    // time in force for limit order
+                    if (TimeInForce == 1) ResetTrade();
+                }
+            }
+
+            // debug from 
+            // Debug(10704, 10708);
+        }
+
         #endregion
 
-        #region exit order logic
-        private void LxOrderSendOrder()
+        #region Exit Order Logic
+        private void LongExit()
         {
             // for exit, this must be true
             if (IsEntryOrderFilled)
@@ -2095,8 +2186,16 @@ namespace PowerLanguage.Function
             // profit 1 in used
             if (SendProfit1)
             {
+                double price;
+
+                // use current tick price for intra bar order generation
+                if (IOGMode == IOGMode.Enabled)
+                    price = Bars.Close[0];
+                else
+                    price = Bars.High[0];
+
                 // profit 1 hit
-                if (Bars.High[0] >= ProfitPrice1 && ProfitQty1 <= Contracts)
+                if (price >= ProfitPrice1 && ProfitQty1 <= Contracts)
                 {
                     ProfitPrice1 = 0;
                     Contracts -= ProfitQty1;
@@ -2128,8 +2227,16 @@ namespace PowerLanguage.Function
             // profit 2 in used
             if (SendProfit2)
             {
+                double price;
+
+                // use current tick price for intra bar order generation
+                if (IOGMode == IOGMode.Enabled)
+                    price = Bars.Close[0];
+                else
+                    price = Bars.High[0];
+
                 // profit 1 hit
-                if (Bars.High[0] >= ProfitPrice2 && ProfitQty2 <= Contracts)
+                if (price >= ProfitPrice2 && ProfitQty2 <= Contracts)
                 {
                     ProfitPrice2 = 0;
                     Contracts -= ProfitQty2;
@@ -2161,8 +2268,16 @@ namespace PowerLanguage.Function
             // profit 3 in used
             if (SendProfit3)
             {
+                double price;
+
+                // use current tick price for intra bar order generation
+                if (IOGMode == IOGMode.Enabled)
+                    price = Bars.Close[0];
+                else
+                    price = Bars.High[0];
+
                 // profit 1 hit
-                if (Bars.High[0] >= ProfitPrice3 && ProfitQty3 <= Contracts)
+                if (price >= ProfitPrice3 && ProfitQty3 <= Contracts)
                 {
                     ProfitPrice3 = 0;
                     Contracts -= ProfitQty3;
@@ -2198,7 +2313,7 @@ namespace PowerLanguage.Function
                 return;
             }
         }
-        private void SxOrderSendOrder()
+        private void ShortExit()
         {
             if (IsEntryOrderFilled)
             {
@@ -2260,8 +2375,16 @@ namespace PowerLanguage.Function
             // profit 1 in used
             if (SendProfit1)
             {
+                double price;
+
+                // use current tick price for intra bar order generation
+                if (IOGMode == IOGMode.Enabled)
+                    price = Bars.Close[0];
+                else
+                    price = Bars.Low[0];
+
                 // profit 1 hit
-                if (Bars.Low[0] <= ProfitPrice1 && ProfitQty1 <= Contracts)
+                if (price <= ProfitPrice1 && ProfitQty1 <= Contracts)
                 {
                     ProfitPrice1 = 0;
                     Contracts -= ProfitQty1;
@@ -2293,8 +2416,16 @@ namespace PowerLanguage.Function
             // profit 2 in used
             if (SendProfit2)
             {
-                // profit 1 hit
-                if (Bars.Low[0] <= ProfitPrice2 && ProfitQty2 <= Contracts)
+                double price;
+
+                // use current tick price for intra bar order generation
+                if (IOGMode == IOGMode.Enabled)
+                    price = Bars.Close[0];
+                else
+                    price = Bars.Low[0];
+
+                // profit 2 hit
+                if (price <= ProfitPrice2 && ProfitQty2 <= Contracts)
                 {
                     ProfitPrice2 = 0;
                     Contracts -= ProfitQty2;
@@ -2326,8 +2457,16 @@ namespace PowerLanguage.Function
             // profit 3 in used
             if (SendProfit3)
             {
-                // profit 1 hit
-                if (Bars.Low[0] <= ProfitPrice3 && ProfitQty3 <= Contracts)
+                double price;
+
+                // use current tick price for intra bar order generation
+                if (IOGMode == IOGMode.Enabled)
+                    price = Bars.Close[0];
+                else
+                    price = Bars.Low[0];
+
+                // profit 3 hit
+                if (price <= ProfitPrice3 && ProfitQty3 <= Contracts)
                 {
                     ProfitPrice3 = 0;
                     Contracts -= ProfitQty3;
@@ -2579,6 +2718,8 @@ namespace PowerLanguage.Function
             {
                 LimitPrice = EntryPrice = limitPrice;
                 Contracts = contracts;
+
+                // time in force defaults to 999 bars
                 TimeInForce = timeInForce;
                 SetEntryOnce = true;
                 IsEntryOrderFilled = false;
@@ -2596,6 +2737,7 @@ namespace PowerLanguage.Function
 
             if (Bars.CurrentBar >= start && Bars.CurrentBar <= end)
             {
+                Print("Class Name: " + EntryName);
                 Print("Chart Bar Number: " + (Bars.CurrentBar + maxBars));
                 Print("Bar Status: " + Bars.Status);
                 Print("Time in Force: " + TimeInForce);
