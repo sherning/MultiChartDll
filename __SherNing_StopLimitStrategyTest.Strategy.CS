@@ -58,8 +58,7 @@ namespace PowerLanguage.Strategy
         }
         protected override void CalcBar()
         {
-
-
+           
         }
 
         #region Print Functions
