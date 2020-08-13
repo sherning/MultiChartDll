@@ -14,7 +14,7 @@ namespace PowerLanguage.Strategy
     {
         //=========================================================================================
         // Project Name : Price Patterns
-        // Description  : Order Execution Test Framework
+        // Description  : Test Framework for Order Execution
         // Type         : Strategy
         // Version      : v3.1
         // Date         : 13 - Aug - 2020
@@ -29,6 +29,8 @@ namespace PowerLanguage.Strategy
 
         /*/
          *--------------------------------------- Objectives --------------------------------------
+         *  1. Test Limit Entry and Exits - Successful
+         *  2. Test Market Entry and Exits - In process
          *--------------------------------------- Objectives --------------------------------------
            
          *---------------------------------------- Versions ---------------------------------------
@@ -49,6 +51,7 @@ namespace PowerLanguage.Strategy
         VariableSeries<EMarketPositionSide> MktDirection;
         IOrderMarket LeMkt, SeMkt;
         IOrderPriced LeLmt, SeLmt;
+        IOrderPriced LxStp, SxStp;
         IOrderPriced LeStp, SeStp;
         IOrderPriced LePft1, LePft2, LePft3;
         IOrderPriced SePft1, SePft2, SePft3;
@@ -59,8 +62,11 @@ namespace PowerLanguage.Strategy
         protected override void Create()
         {
             PricePattern = new PricePatternStrategy(this);
+
+            // Trade Info Class
             LeEntry = new TradeInfo(this, EMarketPositionSide.Long, IOGMode.Enabled, "LE_1");
             SeEntry = new TradeInfo(this, EMarketPositionSide.Short, IOGMode.Enabled, "SE_1");
+
             CurrentBars = new VariableSeries<int>(this);
 
             // market entry
@@ -77,11 +83,18 @@ namespace PowerLanguage.Strategy
             SeLmt = OrderCreator.Limit(new SOrderParameters(
                 Contracts.UserSpecified, "SE_Lmt", EOrderAction.SellShort));
 
-            // stop loss 
+            // stop entry
             LeStp = OrderCreator.Stop(new SOrderParameters(
-                Contracts.Default, "LX_Stp", EOrderAction.Sell));
+                Contracts.UserSpecified, "LE_Stp", EOrderAction.Buy));
 
             SeStp = OrderCreator.Stop(new SOrderParameters(
+                Contracts.UserSpecified, "SE_Stp", EOrderAction.SellShort));
+
+            // stop loss 
+            LxStp = OrderCreator.Stop(new SOrderParameters(
+                Contracts.Default, "LX_Stp", EOrderAction.Sell));
+
+            SxStp = OrderCreator.Stop(new SOrderParameters(
                 Contracts.Default, "SX_Stp", EOrderAction.BuyToCover));
 
             // profit exit
@@ -114,13 +127,11 @@ namespace PowerLanguage.Strategy
         // value fields 
         double OnePip;
         const int EnoughData = 1200;
-        bool LeLmtInForce, SeLmtInForce;
         protected override void StartCalc()
         {
             PricePattern._Length = 6;
             PricePattern._Smooth = 10;
             OnePip = (Bars.Info.BigPointValue / Bars.Info.PriceScale) * 10;
-            LeLmtInForce = SeLmtInForce = false;
 
             if (ShowPriceLevels)
             {
@@ -155,7 +166,9 @@ namespace PowerLanguage.Strategy
             // ensure enought data
             if (Bars.CurrentBar > EnoughData)
             {
-                SendLmtEntry();
+                //SendLmtEntry();
+                //SendMktEntry();
+                SendStpEntry();
                 SendExitOrders();
             }
 
@@ -206,6 +219,26 @@ namespace PowerLanguage.Strategy
 
                 }
             }
+        }
+        private void SendStpEntry()
+        {
+            double entryPrice = CalcHighestHigh(4) + (OnePip * 10);
+            double stopPrice = CalcLowestLow(4) - OnePip;
+
+            if (LeConditions() 
+                && LeEntry.SendEntry == false 
+                && LeEntry.IsEntryOrderFilled == false)
+            {
+                LeEntry.SetStpEntry(entryPrice, 100000, 100);
+                LeEntry.SetStopLoss(stopPrice - OnePip, true);
+                LeEntry.SetProfitTarget(1, 30000, 1, true);
+                LeEntry.SetProfitTarget(2, 40000, 1.5, true);
+                LeEntry.SetProfitTarget(3, 30000, 2, true);
+            }
+
+            LeEntry.Call();
+
+            if (LeEntry.SendEntry) LeStp.Send(LeEntry.StopPrice, LeEntry.Contracts);
         }
         private void SendLmtEntry()
         {
@@ -300,7 +333,7 @@ namespace PowerLanguage.Strategy
 
             if (LeEntry.SendStopLoss)
             {
-                LeStp.Send(LeEntry.StopLossPrice);
+                LxStp.Send(LeEntry.StopLossPrice);
             }
 
             if (LeEntry.SendProfit1)
@@ -323,7 +356,7 @@ namespace PowerLanguage.Strategy
 
             if (SeEntry.SendStopLoss)
             {
-                SeStp.Send(SeEntry.StopLossPrice);
+                SxStp.Send(SeEntry.StopLossPrice);
             }
 
             if (SeEntry.SendProfit1)
@@ -1849,9 +1882,12 @@ namespace PowerLanguage.Function
 
         /*/
          *--------------------------------------- Objectives --------------------------------------
-         *  3.1.1 complete long limit order entry debugging and refactorization
-         *  3.1.2 complete short limit order entry, updated new IOG Mode
-         *  3.1.3 add stop entry and stop limit entry
+         *  3.1.1 complete long limit order entry debugging and refactorization - Successful
+         *  3.1.2 complete short limit order entry, updated new IOG Mode - Successful
+         *  3.1.3 add long stop order entry 
+         *  3.1.4 add short stop order entry
+         *  3.1.5 add stop entry and stop limit entry
+         *  3.1.6 add double stop entry
          *--------------------------------------- Objectives --------------------------------------
            
          *---------------------------------------- Versions ---------------------------------------
@@ -2053,6 +2089,56 @@ namespace PowerLanguage.Function
                     // time in force for limit order
                     if (TimeInForce == 1) ResetTrade();
                 }
+
+                // stop order entry is true
+                if (StopPrice > 0 && LimitPrice <= 0)
+                {
+                    EntryPrice = StopPrice;
+
+                    // limit order filled
+                    if (Bars.High[0] >= EntryPrice)
+                    {
+                        IsEntryOrderFilled = true;
+                        ResetEntry();
+                        return;
+                    }
+
+                    // else, display the entry order line
+                    else
+                    {
+                        SendEntry = true;
+
+                        // display entry price on closing tick when not optimizing
+                        if (DisplayEntry && closingTick && !optimizing)
+                        {
+                            ChartPoint p = new ChartPoint(Bars.Time[0], EntryPrice);
+                            ITextObject txt = DrwText.Create(p, "-");
+                            txt.Color = Color.DarkGreen;
+
+                            // plot text on entry line
+                            if (EntryTxt == false)
+                            {
+                                ChartPoint pt = new ChartPoint(
+                                    Bars.FullSymbolData.Time[-1], EntryPrice + (Displace * OnePip));
+                                ITextObject text = DrwText.Create(pt, "LE");
+                                text.Color = Color.DarkGreen;
+                                EntryTxt = true;
+                            }
+                        }
+
+                        // time in force, once per bar, regardless how many time calcbar is called
+                        if (time != CurrentTime)
+                        {
+                            // this is equivalent to opening tick, but called only once
+                            CurrentTime = time;
+                            TimeInForce--;
+                        }
+                    }
+
+                    // time in force for limit order
+                    if (TimeInForce == 1) ResetTrade();
+                }
+
             }
 
             // debug from 
@@ -2725,7 +2811,20 @@ namespace PowerLanguage.Function
                 IsEntryOrderFilled = false;
             }
         }
+        public void SetStpEntry(double stopPrice, int contracts, int timeInForce = 999)
+        {
+            // do this only once
+            if (SetEntryOnce == false)
+            {
+                StopPrice = EntryPrice = stopPrice;
+                Contracts = contracts;
 
+                // time in force defaults to 999 bars
+                TimeInForce = timeInForce;
+                SetEntryOnce = true;
+                IsEntryOrderFilled = false;
+            }
+        }
         #endregion
 
         #region Debug
