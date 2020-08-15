@@ -7,7 +7,7 @@ using System.Diagnostics;
 
 namespace PowerLanguage.Strategy
 {
-    [IOGMode(IOGMode.Disabled)]
+    [IOGMode(IOGMode.Enabled)]
     public class __SherNing_StopLimitStrategyTest : SignalObject
     {
         //=========================================================================================
@@ -39,23 +39,16 @@ namespace PowerLanguage.Strategy
 
         }
 
-        IOrderMarket buyMarketOrder, sellMarketOrder;
-        double sellStopPrice, sellLimitPrice;
-        FunctionSeriesTest SeriesTest;
-        FunctionSimpleTest SimpleTest;
-
+        VariableObject<double> Vo;
+        VariableSeries<double> Vs;
         protected override void Create()
         {
-            SeriesTest = new FunctionSeriesTest(this);
-            SimpleTest = new FunctionSimpleTest(this);
-
-            buyMarketOrder = OrderCreator.MarketNextBar(new SOrderParameters(
-                Contracts.Default, "EnterLong", EOrderAction.Buy));
-
-            sellMarketOrder = OrderCreator.MarketNextBar(new SOrderParameters(
-                Contracts.Default, "ExitLong", EOrderAction.Sell));
+            Vo = new VariableObject<double>(this);
+            Vs = new VariableSeries<double>(this);
         }
         double OnePip;
+        double Vv;
+
         protected override void StartCalc()
         {
             Output.Clear(); // Clear PowerLanguage Editor output tab
@@ -64,14 +57,11 @@ namespace PowerLanguage.Strategy
 
         protected override void CalcBar()
         {
-            if (Bars.CurrentBar < 30)
+            Vv = Vs.Value = Vo.Value = Bars.Close[0];
+            
+            if (Bars.CurrentBar < 10)
             {
-                //Print("Series Test[0]: " + SeriesTest[0]);
-                //Print("Series Test[1]: " + SeriesTest[1]);
-                if (Bars.CurrentBar % 5 == 0)
-                {
-                    Print("Simple Test:  " + SimpleTest.Value); 
-                }
+                
             }
         }
 
@@ -102,56 +92,3 @@ namespace PowerLanguage.Strategy
     }
 }
 
-namespace PowerLanguage.Function
-{
-    public sealed class FunctionSeriesTest : FunctionSeries<int>
-    {
-        // variable series test later
-        // series Calcbar will be called once per bar, to store prev bar values
-        public FunctionSeriesTest(CStudyControl m) : base(m)
-        {
-
-        }
-
-        int Count;
-        protected override void StartCalc()
-        {
-            Count = 0;
-        }
-        DateTime CurrentTime;
-        protected override int CalcBar()
-        {
-            // update once per bar, no matter how many time it is called.
-            if (Bars.Time[0] != CurrentTime)
-            {
-                CurrentTime = Bars.Time[0];
-                Count++;
-            }
-
-            return Count;
-        }
-    }
-
-    public sealed class FunctionSimpleTest : FunctionSimple<int>
-    {
-        // treat this just as a regular class, which you dont need to 
-        // store values for every bar, only when in demand
-        // but with access to Powerlanguage
-        public FunctionSimpleTest (CStudyControl m) : base(m)
-        {
-
-        }
-        int Count;
-        protected override void StartCalc()
-        {
-            Count = 0;
-        }
-        protected override int CalcBar()
-        {
-            Count++;
-            Output.WriteLine("Count: " + Count);
-            return Count;
-        }
-    }
-
-}

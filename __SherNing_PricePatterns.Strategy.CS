@@ -34,6 +34,8 @@ namespace PowerLanguage.Strategy
          *  3.1.3 - Test Stop Entries with Exits - Successful
          *  3.1.4 - Test Stop Limit Entries using 2 class objects
          *  3.1.5 - Test Stop Limit order with additional 2 profit exit orders
+         *  3.1.6 - Test Stop Limit Short order
+         *  3.1.7 - Test Stop Stop Entries
          *--------------------------------------- Objectives --------------------------------------
            
          *---------------------------------------- Versions ---------------------------------------
@@ -68,9 +70,9 @@ namespace PowerLanguage.Strategy
             PricePattern = new PricePatternStrategy(this);
 
             // Trade Info Class
-            LeEntry1 = new TradeInfo(this, EMarketPositionSide.Long, IOGMode.Enabled, "LE_1");
-            LeEntry2 = new TradeInfo(this, EMarketPositionSide.Long, IOGMode.Enabled, "LE_2");
-            SeEntry = new TradeInfo(this, EMarketPositionSide.Short, IOGMode.Enabled, "SE_1");
+            LeEntry1 = new TradeInfo(this, EMarketPositionSide.Long, "LE_1");
+            LeEntry2 = new TradeInfo(this, EMarketPositionSide.Long, "LE_2");
+            SeEntry = new TradeInfo(this, EMarketPositionSide.Short, "SE_1");
 
             CurrentBars = new VariableSeries<int>(this);
 
@@ -187,7 +189,7 @@ namespace PowerLanguage.Strategy
                 //SendLmtEntry();
                 SendExitOrders();
             }
-
+            
             //Debug();
         }
 
@@ -249,7 +251,7 @@ namespace PowerLanguage.Strategy
                 )
             {
                 // entry 1 - limit order
-                double limitPrice = Bars.Low[0] - (2.5 * OnePip);
+                double limitPrice = Bars.Low[0] - (10 * OnePip);
                 LeEntry1.SetLmtEntry(limitPrice, 100000, 100);
                 LeEntry1.SetStopLoss(limitPrice - (10 * OnePip), true);
                 LeEntry1.SetProfitTarget(1, 30000, 1, true);
@@ -283,6 +285,52 @@ namespace PowerLanguage.Strategy
             }
         }
         private void SendStpLmtEntry2()
+        {
+            // normal strategy framework just use SendEntry()
+
+            // long entry conditions
+            if (LeConditions()
+                && LeEntry1.SendEntry == false
+                && LeEntry1.IsEntryOrderFilled == false
+                && LeEntry2.SendEntry == false
+                && LeEntry2.IsEntryOrderFilled == false
+                )
+            {
+                // entry 1 - limit order
+                double limitPrice = Bars.Low[0] - (2.5 * OnePip);
+                LeEntry1.SetLmtEntry(limitPrice, 100000, 100);
+                LeEntry1.SetStopLoss(limitPrice - (10 * OnePip), true);
+                LeEntry1.SetProfitTarget(1, 30000, 1, true);
+                LeEntry1.SetProfitTarget(2, 40000, 1.5, true);
+                LeEntry1.SetProfitTarget(3, 30000, 2, true);
+
+                // entry 2 - stop order
+                double stopPrice = Bars.High[0] + (10 * OnePip);
+                LeEntry2.SetStpEntry(stopPrice, 100000, 100);
+                LeEntry2.SetStopLoss(stopPrice - (10 * OnePip), true);
+                LeEntry2.SetProfitTarget(1, 30000, 1, true);
+                LeEntry2.SetProfitTarget(2, 40000, 1.5, true);
+                LeEntry2.SetProfitTarget(3, 30000, 2, true);
+            }
+
+            // call function for calculations
+            LeEntry1.Call();
+            LeEntry2.Call();
+
+            // order cancel order
+            LeEntry1.OCO(LeEntry2);
+
+            LeEntry1.Debug(4365, 3);
+            LeEntry2.Debug(4365, 3);
+
+            // if both true then send orders
+            if (LeEntry1.SendEntry && LeEntry2.SendEntry)
+            {
+                LeLmt.Send(LeEntry1.LimitPrice, LeEntry1.Contracts);
+                LeStp.Send(LeEntry2.StopPrice, LeEntry2.Contracts);
+            }
+        }
+        private void SendStpLmtEntry3()
         {
             // normal strategy framework just use SendEntry()
 
@@ -2039,6 +2087,7 @@ namespace PowerLanguage.Function
          *  4.0.1 - FunctionSeries vs FunctionSimple - done
          *  4.0.2 - MarketPosition and PositionSide to improve accuracy
          *  4.0.3 - Improve members' names
+         *  4.0.4 - Fields vs VariableObject
          *--------------------------------------- Objectives --------------------------------------
         /*/
 
@@ -2057,12 +2106,17 @@ namespace PowerLanguage.Function
         /*/
 
         /* Side Notes 
-         * FunctionSimple - Used this like a regular class with access to Powerlanguage. Will not
-         *                  update when Call() or Value() is not in use.
-         *                  
-         * FunctionSimple - Used this when you need to access prev bar's closing tick values for
-         *                  calculations. Otherwisem, it is similar to FunctionSimple, except that
-         *                  CalcBar() is called at least once, every without external call().
+         *  FunctionSimple - Used this like a regular class with access to Powerlanguage. Will not
+         *                   update when Call() or Value() is not in use.
+         *                   
+         *  FunctionSimple - Used this when you need to access prev bar's closing tick values for
+         *                   calculations. Otherwisem, it is similar to FunctionSimple, except that
+         *                   CalcBar() is called at least once, every without external call().
+         *                   
+         *  VariableSeries - Preserves historical value of the variable for access
+         *  
+         *  VariableObject - Class fields and VariableObject is 99.99% similar.
+         * 
          */
         #endregion
 
@@ -2070,7 +2124,6 @@ namespace PowerLanguage.Function
         #region class properties
         public string EntryName { get; private set; }
         public EMarketPositionSide TradeDirection { get; private set; }
-        public IOGMode IOGMode { get; private set; }
 
         // entry and stop properties
         public double EntryPrice { get; set; }
@@ -2107,19 +2160,27 @@ namespace PowerLanguage.Function
         public bool DisplayProfits { private get; set; }
         #endregion
 
-        public TradeInfo(CStudyControl m, EMarketPositionSide direction, IOGMode mode, string entryName)
+        public TradeInfo(CStudyControl m, EMarketPositionSide direction, string entryName)
             : base(m)
         {
             TradeDirection = direction;
             EntryName = entryName;
-            IOGMode = mode;
+        }
+
+        // fields - reference types
+        VariableSeries<int> MarketPosition;
+        protected override void Create()
+        {
+            // track market position
+            MarketPosition = new VariableSeries<int>(this);
         }
 
         // fields - value types
-        int Displace;
+        int TxtDisplace;
         double OnePip;
-        bool EntryTxt, StopLossTxt, ProfitTxt1, ProfitTxt2, ProfitTxt3;
-        bool SetEntryOnce, SetStopLossOnce, SetProfit1Once, SetProfit2Once, SetProfit3Once;
+        bool PrintEntryTxtOnce, PrintStopLossTxtOnce;
+        bool PrintProfit1TxtOnce, PrintProfit2TxtOnce, PrintProfit3TxtOnce;
+        bool EntryPriceLock, StopLossPriceLock, ProfitPrice1Lock, ProfitPrice2Lock, ProfitPrice3Lock;
         private void CancelOrder()
         {
             // position reset method below fields for easier reference
@@ -2132,13 +2193,13 @@ namespace PowerLanguage.Function
             EntryPrice = LimitPrice = StopPrice = 0;
 
             // reset profit flags
-            SetProfit1Once = SetProfit2Once = SetProfit3Once = false;
+            ProfitPrice1Lock = ProfitPrice2Lock = ProfitPrice3Lock = false;
 
             // reset entry and stop loss flags
-            SetEntryOnce = SetStopLossOnce = false;
+            EntryPriceLock = StopLossPriceLock = false;
 
             // entry text
-            EntryTxt = false;
+            PrintEntryTxtOnce = false;
 
             // reset flag to trigger Send()
             SendEntry = false;
@@ -2164,7 +2225,7 @@ namespace PowerLanguage.Function
             Contracts = ProfitQty1 = ProfitQty2 = ProfitQty3 = 0;
 
             // reset txt flags that plot exit txt
-            StopLossTxt = ProfitTxt1 = ProfitTxt2 = ProfitTxt3 = false;
+            PrintStopLossTxtOnce = PrintProfit1TxtOnce = PrintProfit2TxtOnce = PrintProfit3TxtOnce = false;
         }
         protected override void StartCalc()
         {
@@ -2172,13 +2233,17 @@ namespace PowerLanguage.Function
             OnePip = (Bars.Info.BigPointValue / Bars.Info.PriceScale) * 10;
 
             // distance between text and price levels, 1 = 1 pip
-            Displace = 1;
+            TxtDisplace = 1;
 
             // reset
             CancelOrder();
         }
         protected override int CalcBar()
         {
+            // CStudyControl is passed in here.
+            if (StrategyInfo != null) 
+                MarketPosition.Value = StrategyInfo.MarketPosition;
+
             switch (TradeDirection)
             {
                 case EMarketPositionSide.Long:
@@ -2254,13 +2319,13 @@ namespace PowerLanguage.Function
                             ITextObject txt = DrwText.Create(p, "-");
                             txt.Color = Color.LimeGreen;
 
-                            if (EntryTxt == false)
+                            if (PrintEntryTxtOnce == false)
                             {
                                 ChartPoint pt = new ChartPoint(
-                                    Bars.FullSymbolData.Time[-1], EntryPrice + (Displace * OnePip));
+                                    Bars.FullSymbolData.Time[-1], EntryPrice + (TxtDisplace * OnePip));
                                 ITextObject text = DrwText.Create(pt, "LE");
                                 text.Color = Color.LimeGreen;
-                                EntryTxt = true;
+                                PrintEntryTxtOnce = true;
                             }
                         }
 
@@ -2303,13 +2368,13 @@ namespace PowerLanguage.Function
                             txt.Color = Color.DarkGreen;
 
                             // plot text on entry line
-                            if (EntryTxt == false)
+                            if (PrintEntryTxtOnce == false)
                             {
                                 ChartPoint pt = new ChartPoint(
-                                    Bars.FullSymbolData.Time[-1], EntryPrice + (Displace * OnePip));
+                                    Bars.FullSymbolData.Time[-1], EntryPrice + (TxtDisplace * OnePip));
                                 ITextObject text = DrwText.Create(pt, "LE");
                                 text.Color = Color.DarkGreen;
-                                EntryTxt = true;
+                                PrintEntryTxtOnce = true;
                             }
                         }
 
@@ -2361,13 +2426,13 @@ namespace PowerLanguage.Function
                             ITextObject txt = DrwText.Create(p, "-");
                             txt.Color = Color.Red;
 
-                            if (EntryTxt == false)
+                            if (PrintEntryTxtOnce == false)
                             {
                                 ChartPoint pt = new ChartPoint(
-                                    Bars.FullSymbolData.Time[-1], EntryPrice + (Displace * OnePip));
+                                    Bars.FullSymbolData.Time[-1], EntryPrice + (TxtDisplace * OnePip));
                                 ITextObject text = DrwText.Create(pt, "SE");
                                 text.Color = Color.Red;
-                                EntryTxt = true;
+                                PrintEntryTxtOnce = true;
                             }
                         }
 
@@ -2409,13 +2474,13 @@ namespace PowerLanguage.Function
                             ITextObject txt = DrwText.Create(p, "-");
                             txt.Color = Color.DarkRed;
 
-                            if (EntryTxt == false)
+                            if (PrintEntryTxtOnce == false)
                             {
                                 ChartPoint pt = new ChartPoint(
-                                    Bars.FullSymbolData.Time[-1], EntryPrice + (Displace * OnePip));
+                                    Bars.FullSymbolData.Time[-1], EntryPrice + (TxtDisplace * OnePip));
                                 ITextObject text = DrwText.Create(pt, "SE");
                                 text.Color = Color.DarkRed;
-                                EntryTxt = true;
+                                PrintEntryTxtOnce = true;
                             }
                         }
 
@@ -2472,12 +2537,12 @@ namespace PowerLanguage.Function
                 double price;
 
                 // use current tick price for intra bar order generation
-                if (IOGMode == IOGMode.Enabled)
+                if (Environment.IOGEnabled)
                     price = Bars.Close[0];
                 else
                     price = Bars.Low[0];
 
-                // stop loss hit, exit all contracts
+                // stop loss hit, exit all contracts, add GAP logic
                 if (price <= StopLossPrice)
                 {
                     CancelOrder();
@@ -2492,14 +2557,14 @@ namespace PowerLanguage.Function
                         txt.Color = Color.Yellow;
 
                         // plot this only once
-                        if (StopLossTxt == false)
+                        if (PrintStopLossTxtOnce == false)
                         {
                             ChartPoint x = new ChartPoint(
-                                Bars.FullSymbolData.Time[-1], StopLossPrice + (OnePip * Displace));
+                                Bars.FullSymbolData.Time[-1], StopLossPrice + (OnePip * TxtDisplace));
 
                             ITextObject t = DrwText.Create(x, "SL");
                             t.Color = Color.Yellow;
-                            StopLossTxt = true;
+                            PrintStopLossTxtOnce = true;
                         }
                     }
                 }
@@ -2511,7 +2576,7 @@ namespace PowerLanguage.Function
                 double price;
 
                 // use current tick price for intra bar order generation
-                if (IOGMode == IOGMode.Enabled)
+                if (Environment.IOGEnabled)
                     price = Bars.Close[0];
                 else
                     price = Bars.High[0];
@@ -2533,14 +2598,14 @@ namespace PowerLanguage.Function
                         txt.Color = Color.Cyan;
 
                         // plot this only once
-                        if (ProfitTxt1 == false)
+                        if (PrintProfit1TxtOnce == false)
                         {
                             ChartPoint x = new ChartPoint(
-                                Bars.FullSymbolData.Time[-1], ProfitPrice1 + (OnePip * Displace));
+                                Bars.FullSymbolData.Time[-1], ProfitPrice1 + (OnePip * TxtDisplace));
 
                             ITextObject t = DrwText.Create(x, "P1");
                             t.Color = Color.Cyan;
-                            ProfitTxt1 = true;
+                            PrintProfit1TxtOnce = true;
                         }
                     }
                 }
@@ -2552,7 +2617,7 @@ namespace PowerLanguage.Function
                 double price;
 
                 // use current tick price for intra bar order generation
-                if (IOGMode == IOGMode.Enabled)
+                if (Environment.IOGEnabled)
                     price = Bars.Close[0];
                 else
                     price = Bars.High[0];
@@ -2574,14 +2639,14 @@ namespace PowerLanguage.Function
                         txt.Color = Color.Cyan;
 
                         // plot this only once
-                        if (ProfitTxt2 == false)
+                        if (PrintProfit2TxtOnce == false)
                         {
                             ChartPoint x = new ChartPoint(
-                                Bars.FullSymbolData.Time[-1], ProfitPrice2 + (OnePip * Displace));
+                                Bars.FullSymbolData.Time[-1], ProfitPrice2 + (OnePip * TxtDisplace));
 
                             ITextObject t = DrwText.Create(x, "P2");
                             t.Color = Color.Cyan;
-                            ProfitTxt2 = true;
+                            PrintProfit2TxtOnce = true;
                         }
                     }
                 }
@@ -2593,7 +2658,7 @@ namespace PowerLanguage.Function
                 double price;
 
                 // use current tick price for intra bar order generation
-                if (IOGMode == IOGMode.Enabled)
+                if (Environment.IOGEnabled)
                     price = Bars.Close[0];
                 else
                     price = Bars.High[0];
@@ -2615,14 +2680,14 @@ namespace PowerLanguage.Function
                         txt.Color = Color.Cyan;
 
                         // plot this only once
-                        if (ProfitTxt3 == false)
+                        if (PrintProfit3TxtOnce == false)
                         {
                             ChartPoint x = new ChartPoint(
-                                Bars.FullSymbolData.Time[-1], ProfitPrice3 + (OnePip * Displace));
+                                Bars.FullSymbolData.Time[-1], ProfitPrice3 + (OnePip * TxtDisplace));
 
                             ITextObject t = DrwText.Create(x, "P3");
                             t.Color = Color.Cyan;
-                            ProfitTxt3 = true;
+                            PrintProfit3TxtOnce = true;
                         }
                     }
                 }
@@ -2669,7 +2734,7 @@ namespace PowerLanguage.Function
                 double price;
 
                 // use current tick price for intra bar order generation
-                if (IOGMode == IOGMode.Enabled)
+                if (Environment.IOGEnabled)
                     price = Bars.Close[0];
                 else
                     price = Bars.High[0];
@@ -2689,14 +2754,14 @@ namespace PowerLanguage.Function
                         txt.Color = Color.Yellow;
 
                         // plot this only once
-                        if (StopLossTxt == false)
+                        if (PrintStopLossTxtOnce == false)
                         {
                             ChartPoint x = new ChartPoint(
-                                Bars.FullSymbolData.Time[-1], StopLossPrice + (OnePip * Displace));
+                                Bars.FullSymbolData.Time[-1], StopLossPrice + (OnePip * TxtDisplace));
 
                             ITextObject t = DrwText.Create(x, "SL");
                             t.Color = Color.Yellow;
-                            StopLossTxt = true;
+                            PrintStopLossTxtOnce = true;
                         }
                     }
                 }
@@ -2708,7 +2773,7 @@ namespace PowerLanguage.Function
                 double price;
 
                 // use current tick price for intra bar order generation
-                if (IOGMode == IOGMode.Enabled)
+                if (Environment.IOGEnabled)
                     price = Bars.Close[0];
                 else
                     price = Bars.Low[0];
@@ -2730,14 +2795,14 @@ namespace PowerLanguage.Function
                         txt.Color = Color.Cyan;
 
                         // plot this only once
-                        if (ProfitTxt1 == false)
+                        if (PrintProfit1TxtOnce == false)
                         {
                             ChartPoint x = new ChartPoint(
-                                Bars.FullSymbolData.Time[-1], ProfitPrice1 + (OnePip * Displace));
+                                Bars.FullSymbolData.Time[-1], ProfitPrice1 + (OnePip * TxtDisplace));
 
                             ITextObject t = DrwText.Create(x, "P1");
                             t.Color = Color.Cyan;
-                            ProfitTxt1 = true;
+                            PrintProfit1TxtOnce = true;
                         }
                     }
                 }
@@ -2749,7 +2814,7 @@ namespace PowerLanguage.Function
                 double price;
 
                 // use current tick price for intra bar order generation
-                if (IOGMode == IOGMode.Enabled)
+                if (Environment.IOGEnabled)
                     price = Bars.Close[0];
                 else
                     price = Bars.Low[0];
@@ -2771,14 +2836,14 @@ namespace PowerLanguage.Function
                         txt.Color = Color.Cyan;
 
                         // plot this only once
-                        if (ProfitTxt2 == false)
+                        if (PrintProfit2TxtOnce == false)
                         {
                             ChartPoint x = new ChartPoint(
-                                Bars.FullSymbolData.Time[-1], ProfitPrice2 + (OnePip * Displace));
+                                Bars.FullSymbolData.Time[-1], ProfitPrice2 + (OnePip * TxtDisplace));
 
                             ITextObject t = DrwText.Create(x, "P2");
                             t.Color = Color.Cyan;
-                            ProfitTxt2 = true;
+                            PrintProfit2TxtOnce = true;
                         }
                     }
                 }
@@ -2790,7 +2855,7 @@ namespace PowerLanguage.Function
                 double price;
 
                 // use current tick price for intra bar order generation
-                if (IOGMode == IOGMode.Enabled)
+                if (Environment.IOGEnabled)
                     price = Bars.Close[0];
                 else
                     price = Bars.Low[0];
@@ -2812,14 +2877,14 @@ namespace PowerLanguage.Function
                         txt.Color = Color.Cyan;
 
                         // plot this only once
-                        if (ProfitTxt3 == false)
+                        if (PrintProfit3TxtOnce == false)
                         {
                             ChartPoint x = new ChartPoint(
-                                Bars.FullSymbolData.Time[-1], ProfitPrice3 + (OnePip * Displace));
+                                Bars.FullSymbolData.Time[-1], ProfitPrice3 + (OnePip * TxtDisplace));
 
                             ITextObject t = DrwText.Create(x, "P3");
                             t.Color = Color.Cyan;
-                            ProfitTxt3 = true;
+                            PrintProfit3TxtOnce = true;
                         }
                     }
                 }
@@ -2935,7 +3000,7 @@ namespace PowerLanguage.Function
 
             SetProfitPrice(target, profitPrice, quantity);
         }
-        public void SetProfitTarget(int target, int quantity, double riskReward, bool once)
+        public void SetProfitTarget(int target, int quantity, double riskReward, bool lockPrice)
         {
             double risk, profitPrice = 0;
 
@@ -2952,7 +3017,7 @@ namespace PowerLanguage.Function
             else if (TradeDirection == EMarketPositionSide.Short)
                 profitPrice = EntryPrice - (risk * riskReward);
 
-            SetProfitPrice(target, profitPrice, quantity, once);
+            SetProfitPrice(target, profitPrice, quantity, lockPrice);
         }
         public void SetProfitPrice(int target, double price, int quantity)
         {
@@ -2980,37 +3045,37 @@ namespace PowerLanguage.Function
                     break;
             }
         }
-        public void SetProfitPrice(int target, double price, int quantity, bool once)
+        public void SetProfitPrice(int target, double price, int quantity, bool lockPrice)
         {
             switch (target)
             {
                 // profit target 1
                 case 1:
-                    if (once && SetProfit1Once == false)
+                    if (lockPrice && ProfitPrice1Lock == false)
                     {
                         ProfitPrice1 = price;
                         ProfitQty1 = quantity;
-                        SetProfit1Once = true;
+                        ProfitPrice1Lock = true;
                     }
                     break;
 
                 // profit target 2
                 case 2:
-                    if (once && SetProfit2Once == false)
+                    if (lockPrice && ProfitPrice2Lock == false)
                     {
                         ProfitPrice2 = price;
                         ProfitQty2 = quantity;
-                        SetProfit2Once = true;
+                        ProfitPrice2Lock = true;
                     }
                     break;
 
                 // profit target 3
                 case 3:
-                    if (once && SetProfit3Once == false)
+                    if (lockPrice && ProfitPrice3Lock == false)
                     {
                         ProfitPrice3 = price;
                         ProfitQty3 = quantity;
-                        SetProfit3Once = true;
+                        ProfitPrice3Lock = true;
                     }
                     break;
 
@@ -3024,13 +3089,13 @@ namespace PowerLanguage.Function
             Contracts = contracts;
             IsEntryOrderFilled = true;
         }
-        public void SetStopLoss(double stoploss, bool once)
+        public void SetStopLoss(double stoploss, bool lockPrice)
         {
             // set stop loss price only once
-            if (once && SetStopLossOnce == false)
+            if (lockPrice && StopLossPriceLock == false)
             {
                 StopLossPrice = stoploss;
-                SetStopLossOnce = true;
+                StopLossPriceLock = true;
             }
             else
             {
@@ -3040,28 +3105,28 @@ namespace PowerLanguage.Function
         public void SetLmtEntry(double limitPrice, int contracts, int timeInForce = 999)
         {
             // do this only once
-            if (SetEntryOnce == false)
+            if (EntryPriceLock == false)
             {
                 LimitPrice = EntryPrice = limitPrice;
                 Contracts = contracts;
 
                 // time in force defaults to 999 bars
                 TimeInForce = timeInForce;
-                SetEntryOnce = true;
+                EntryPriceLock = true;
                 IsEntryOrderFilled = false;
             }
         }
         public void SetStpEntry(double stopPrice, int contracts, int timeInForce = 999)
         {
-            // do this only once
-            if (SetEntryOnce == false)
+            // lock entry price, prevent updating
+            if (EntryPriceLock == false)
             {
                 StopPrice = EntryPrice = stopPrice;
                 Contracts = contracts;
 
                 // time in force defaults to 999 bars
                 TimeInForce = timeInForce;
-                SetEntryOnce = true;
+                EntryPriceLock = true;
                 IsEntryOrderFilled = false;
             }
         }
@@ -3096,6 +3161,7 @@ namespace PowerLanguage.Function
                 Print("Profit Price 3: " + ProfitPrice3);
                 Print("Profit Qty 3: " + ProfitQty3);
                 Print("Contracts: " + Contracts);
+                Print("Market Position: " + MarketPosition[0]);
                 Print("High: " + Bars.High[0]);
                 Print("Low: " + Bars.Low[0]);
                 Print("Open: " + Bars.Open[0]);
