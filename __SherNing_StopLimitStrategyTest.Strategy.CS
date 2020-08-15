@@ -7,7 +7,7 @@ using System.Diagnostics;
 
 namespace PowerLanguage.Strategy
 {
-    [IOGMode(IOGMode.Enabled)]
+    [IOGMode(IOGMode.Disabled)]
     public class __SherNing_StopLimitStrategyTest : SignalObject
     {
         //=========================================================================================
@@ -34,31 +34,52 @@ namespace PowerLanguage.Strategy
          *---------------------------------------- Versions ---------------------------------------
          *---------------------------------------- Versions ---------------------------------------
         /*/
-        public __SherNing_StopLimitStrategyTest(object _ctx) : base(_ctx) 
-        { 
-        
+        public __SherNing_StopLimitStrategyTest(object _ctx) : base(_ctx)
+        {
+
         }
 
-        IOrderStopLimit LeStpLmt, LxStpLmt;
-        IOrderMarket LeMkt;
+        IOrderMarket buyMarketOrder, sellMarketOrder;
+        double sellStopPrice, sellLimitPrice;
+        FunctionSeriesTest SeriesTest;
+        FunctionSimpleTest SimpleTest;
 
         protected override void Create()
         {
-            LeMkt = OrderCreator.MarketNextBar(new SOrderParameters(
-                Contracts.UserSpecified, "Le_Mkt", EOrderAction.Buy));
+            SeriesTest = new FunctionSeriesTest(this);
+            SimpleTest = new FunctionSimpleTest(this);
 
-            LeStpLmt = OrderCreator.StopLimit(new SOrderParameters(
-                Contracts.UserSpecified, "Le_StpLmt", EOrderAction.Buy));
+            buyMarketOrder = OrderCreator.MarketNextBar(new SOrderParameters(
+                Contracts.Default, "EnterLong", EOrderAction.Buy));
 
-            LxStpLmt = OrderCreator.StopLimit(new SOrderParameters(
-                Contracts.UserSpecified, "Lx_StpLmt", EOrderAction.Sell));
+            sellMarketOrder = OrderCreator.MarketNextBar(new SOrderParameters(
+                Contracts.Default, "ExitLong", EOrderAction.Sell));
         }
+        double OnePip;
         protected override void StartCalc()
         {
+            Output.Clear(); // Clear PowerLanguage Editor output tab
+            OnePip = (Bars.Info.BigPointValue / Bars.Info.PriceScale) * 10;
         }
+
         protected override void CalcBar()
         {
-           
+            if (Bars.CurrentBar < 30)
+            {
+                //Print("Series Test[0]: " + SeriesTest[0]);
+                //Print("Series Test[1]: " + SeriesTest[1]);
+                if (Bars.CurrentBar % 5 == 0)
+                {
+                    Print("Simple Test:  " + SimpleTest.Value); 
+                }
+            }
+        }
+
+        private void Display(double price, Color color)
+        {
+            ChartPoint p = new ChartPoint(Bars.Time[0], price);
+            ITextObject txt = DrwText.Create(p, "-");
+            txt.Color = color;
         }
 
         #region Print Functions
@@ -79,4 +100,58 @@ namespace PowerLanguage.Strategy
         }
         #endregion
     }
+}
+
+namespace PowerLanguage.Function
+{
+    public sealed class FunctionSeriesTest : FunctionSeries<int>
+    {
+        // variable series test later
+        // series Calcbar will be called once per bar, to store prev bar values
+        public FunctionSeriesTest(CStudyControl m) : base(m)
+        {
+
+        }
+
+        int Count;
+        protected override void StartCalc()
+        {
+            Count = 0;
+        }
+        DateTime CurrentTime;
+        protected override int CalcBar()
+        {
+            // update once per bar, no matter how many time it is called.
+            if (Bars.Time[0] != CurrentTime)
+            {
+                CurrentTime = Bars.Time[0];
+                Count++;
+            }
+
+            return Count;
+        }
+    }
+
+    public sealed class FunctionSimpleTest : FunctionSimple<int>
+    {
+        // treat this just as a regular class, which you dont need to 
+        // store values for every bar, only when in demand
+        // but with access to Powerlanguage
+        public FunctionSimpleTest (CStudyControl m) : base(m)
+        {
+
+        }
+        int Count;
+        protected override void StartCalc()
+        {
+            Count = 0;
+        }
+        protected override int CalcBar()
+        {
+            Count++;
+            Output.WriteLine("Count: " + Count);
+            return Count;
+        }
+    }
+
 }
