@@ -8,9 +8,649 @@ using System.Collections.Generic;
 
 namespace PowerLanguage.Strategy
 {
-    #region Strategy - Price Pattern v31
+    #region Strategy - Price Pattern v32
     [IOGMode(IOGMode.Enabled)]
     public class __SherNing_PricePatterns : SignalObject
+    {
+        //=========================================================================================
+        // Project Name : Price Patterns
+        // Description  : Test Framework for Order Execution
+        // Type         : Strategy
+        // Version      : v3.2
+        // Date         : 17 - Aug - 2020
+        // Time Taken   : 
+        // Remarks      : Template for OrderInfo Class
+        //=========================================================================================
+        // Copyright    : 2020, Sher Ning Quantitative Technologies           
+        // License      : Nil
+        // Client       : Nil
+        // Details      : sherning@hotmail.com
+        //=========================================================================================
+
+        /*/
+         *--------------------------------------- Objectives --------------------------------------
+         *  3.2.1 - Clean up Code
+         *--------------------------------------- Objectives --------------------------------------
+           
+         *---------------------------------------- Versions ---------------------------------------
+         *  3.1.1 - Test Limit Entries with Exits - Successful
+         *  3.1.2 - Test Market Entries with Exits - Succssful
+         *  3.1.3 - Test Stop Entries with Exits - Successful
+         *  3.1.4 - Test Stop Limit Entries using 2 class objects - done
+         *  3.1.5 - Test Stop Limit order with additional 2 profit exit orders - done
+         *  3.1.6 - Test Stop Limit Short order - successful
+         *  3.1.7 - Test Stop Stop Entries
+         *---------------------------------------- Versions ---------------------------------------
+        /*/
+
+        // strategy inputs
+        [Input] public bool ShowPriceLevels { get; set; }
+        public __SherNing_PricePatterns(object _ctx) : base(_ctx)
+        {
+            ShowPriceLevels = true;
+        }
+
+        // reference fields 
+        PricePatternStrategy PricePattern;
+        VariableSeries<double> Pama1, Pama2, Pama3;
+        VariableSeries<int> MktPosition;
+        VariableSeries<EMarketPositionSide> MktDirection;
+        IOrderMarket LeMkt, SeMkt;
+        IOrderPriced LeLmt, SeLmt;
+        IOrderPriced LxStp, SxStp;
+        IOrderPriced LeStp, SeStp;
+        IOrderPriced LePft1, LePft2, LePft3;
+        IOrderPriced SePft1, SePft2, SePft3;
+
+        TradeInfo LeEntry1, LeEntry2, SeEntry1, SeEntry2;
+        VariableSeries<int> CurrentBars;
+
+        protected override void Create()
+        {
+            PricePattern = new PricePatternStrategy(this);
+
+            // Trade Info Class
+            LeEntry1 = new TradeInfo(this, EMarketPositionSide.Long, "LE_1");
+            LeEntry2 = new TradeInfo(this, EMarketPositionSide.Long, "LE_2");
+            SeEntry1 = new TradeInfo(this, EMarketPositionSide.Short, "SE_1");
+            SeEntry2 = new TradeInfo(this, EMarketPositionSide.Short, "SE_2");
+
+            CurrentBars = new VariableSeries<int>(this);
+
+            // market entry
+            LeMkt = OrderCreator.MarketNextBar(new SOrderParameters(
+                Contracts.UserSpecified, "LE_Mkt", EOrderAction.Buy));
+
+            SeMkt = OrderCreator.MarketNextBar(new SOrderParameters(
+                Contracts.UserSpecified, "SE_Mkt", EOrderAction.SellShort));
+
+            // limit entry 
+            LeLmt = OrderCreator.Limit(new SOrderParameters(
+                Contracts.UserSpecified, "LE_Lmt", EOrderAction.Buy));
+
+            SeLmt = OrderCreator.Limit(new SOrderParameters(
+                Contracts.UserSpecified, "SE_Lmt", EOrderAction.SellShort));
+
+            // stop entry
+            LeStp = OrderCreator.Stop(new SOrderParameters(
+                Contracts.UserSpecified, "LE_Stp", EOrderAction.Buy));
+
+            SeStp = OrderCreator.Stop(new SOrderParameters(
+                Contracts.UserSpecified, "SE_Stp", EOrderAction.SellShort));
+
+            // stop loss 
+            LxStp = OrderCreator.Stop(new SOrderParameters(
+                Contracts.Default, "LX_Stp", EOrderAction.Sell));
+
+            SxStp = OrderCreator.Stop(new SOrderParameters(
+                Contracts.Default, "SX_Stp", EOrderAction.BuyToCover));
+
+            // profit exit
+            LePft1 = OrderCreator.Limit(new SOrderParameters(
+                Contracts.UserSpecified, "LX_P1", EOrderAction.Sell));
+
+            LePft2 = OrderCreator.Limit(new SOrderParameters(
+            Contracts.UserSpecified, "LX_P2", EOrderAction.Sell));
+
+            LePft3 = OrderCreator.Limit(new SOrderParameters(
+            Contracts.UserSpecified, "LX_P3", EOrderAction.Sell));
+
+            // profit exit
+            SePft1 = OrderCreator.Limit(new SOrderParameters(
+                Contracts.UserSpecified, "SX_P1", EOrderAction.BuyToCover));
+
+            SePft2 = OrderCreator.Limit(new SOrderParameters(
+               Contracts.UserSpecified, "SX_P2", EOrderAction.BuyToCover));
+
+            SePft3 = OrderCreator.Limit(new SOrderParameters(
+               Contracts.UserSpecified, "SX_P3", EOrderAction.BuyToCover));
+
+            MktPosition = new VariableSeries<int>(this);
+            MktDirection = new VariableSeries<EMarketPositionSide>(this);
+
+            // clear output window
+            Output.Clear();
+        }
+
+        // value fields 
+        double OnePip;
+        const int EnoughData = 1200;
+        protected override void StartCalc()
+        {
+            PricePattern._Length = 6;
+            PricePattern._Smooth = 10;
+            OnePip = (Bars.Info.BigPointValue / Bars.Info.PriceScale) * 10;
+
+            if (ShowPriceLevels)
+            {
+                // display price lines
+                LeEntry1.DisplayEntry = LeEntry1.DisplayProfits = LeEntry1.DisplayStopLoss = true;
+                LeEntry2.DisplayEntry = LeEntry2.DisplayProfits = LeEntry2.DisplayStopLoss = true;
+                SeEntry1.DisplayEntry = SeEntry1.DisplayStopLoss = SeEntry1.DisplayProfits = true;
+                SeEntry2.DisplayEntry = SeEntry2.DisplayStopLoss = SeEntry2.DisplayProfits = true;
+            }
+            else
+            {
+                LeEntry1.DisplayEntry = LeEntry1.DisplayProfits = LeEntry1.DisplayStopLoss = false;
+                LeEntry2.DisplayEntry = LeEntry2.DisplayProfits = LeEntry2.DisplayStopLoss = false;
+                SeEntry1.DisplayEntry = SeEntry1.DisplayStopLoss = SeEntry1.DisplayProfits = false;
+                SeEntry2.DisplayEntry = SeEntry2.DisplayStopLoss = SeEntry2.DisplayProfits = false;
+            }
+        }
+        protected override void CalcBar()
+        {
+            // call strategy function on closing tick
+            if (Bars.Status == EBarState.Close) PricePattern.Call();
+
+            // keep track of market position
+            MktPosition.Value = StrategyInfo.MarketPosition;
+            MktDirection.Value = CurrentPosition.Side;
+
+            if (Bars.CurrentBar == 1)
+            {
+                // assign same reference location as function
+                Pama1 = PricePattern.Pama1;
+                Pama2 = PricePattern.Pama2;
+                Pama3 = PricePattern.Pama3;
+            }
+
+            // ensure enought data
+            if (Bars.CurrentBar > EnoughData)
+            {
+                //SendStpEntry();
+                //SendMktEntry();
+                //SendStpLmtEntry();
+                SendStpStpEntry();
+                //SendLmtEntry();
+                SendExitOrders();
+            }
+        }
+
+        #region Send Order Command
+        DateTime CurrentTime;
+
+        #region Send Entry Framework
+        private void SendStpEntry()
+        {
+            // successful
+            double entryPrice = Bars.Close[0] + (OnePip * 10);
+            double stopPrice = Bars.Close[0] - (OnePip * 10);
+
+            // long conditions
+            if (LeConditions()
+                && LeEntry1.SendEntry == false
+                && LeEntry1.IsEntryOrderFilled == false
+                && SeEntry1.SendEntry == false
+                && SeEntry1.IsEntryOrderFilled == false)
+            {
+                LeEntry1.SetStopMarketOrder(entryPrice, 100000, 100);
+                LeEntry1.SetStopLoss(stopPrice - OnePip, true);
+                LeEntry1.SetProfitTarget(1, 30000, 1, true);
+                LeEntry1.SetProfitTarget(2, 40000, 1.5, true);
+                LeEntry1.SetProfitTarget(3, 30000, 2, true);
+            }
+
+            LeEntry1.Call();
+
+            if (LeEntry1.SendEntry) LeStp.Send(LeEntry1.StopPrice, LeEntry1.Contracts);
+
+            // short conditions
+            entryPrice = Bars.Close[0] - (OnePip * 10);
+            stopPrice = Bars.Close[0] + (OnePip * 10);
+
+            if (SeConditions()
+                && SeEntry1.SendEntry == false
+                && SeEntry1.IsEntryOrderFilled == false
+                && LeEntry1.SendEntry == false
+                && LeEntry1.IsEntryOrderFilled == false)
+            {
+                SeEntry1.SetStopMarketOrder(entryPrice, 100000, 100);
+                SeEntry1.SetStopLoss(stopPrice + OnePip, true);
+                SeEntry1.SetProfitTarget(1, 30000, 1, true);
+                SeEntry1.SetProfitTarget(2, 40000, 1.5, true);
+                SeEntry1.SetProfitTarget(3, 30000, 2, true);
+            }
+
+            SeEntry1.Call();
+
+            if (SeEntry1.SendEntry) SeStp.Send(SeEntry1.StopPrice, SeEntry1.Contracts);
+        }
+        private void SendLmtEntry()
+        {
+            // successful
+            // for limit order cannot send at close, it will not work
+            double lePrice = CalcLowestLow(4) - OnePip;
+            double leStop = CalcLowestLow(4) - (OnePip * 10);
+
+            // if conditions are okay. send limit order, what happens if a new condition occurs ?
+            if (LeConditions() &&
+                LeEntry1.SendEntry == false &&
+                LeEntry1.IsEntryOrderFilled == false &&
+                SeEntry1.IsEntryOrderFilled == false &&
+                SeEntry1.SendEntry == false)
+            {
+                // setup entry and exit properties
+                LeEntry1.SetLimitOrder(lePrice, 100000, 100);
+                LeEntry1.SetStopLoss(leStop - OnePip, true);
+                LeEntry1.SetProfitTarget(1, 30000, 1, true);
+                LeEntry1.SetProfitTarget(2, 40000, 1.5, true);
+                LeEntry1.SetProfitTarget(3, 30000, 2, true);
+            }
+
+            // function calcbar will do the settle the logic to decide to send order
+            LeEntry1.Call();
+
+            // if entry conditions are right, send order
+            if (LeEntry1.SendEntry) LeLmt.Send(LeEntry1.EntryPrice, LeEntry1.Contracts);
+
+            double sePrice = CalcHighestHigh(4) + OnePip;
+            double seStop = CalcHighestHigh(4) + (OnePip * 10);
+
+            // conditions check
+            if (SeConditions() &&
+                !SeEntry1.SendEntry &&
+                !SeEntry1.IsEntryOrderFilled &&
+                !LeEntry1.IsEntryOrderFilled &&
+                !LeEntry1.SendEntry)
+            {
+                // setup entry and exit properties
+                SeEntry1.SetLimitOrder(sePrice, 100000, 100);
+                SeEntry1.SetStopLoss(seStop + OnePip, true);
+                SeEntry1.SetProfitTarget(1, 30000, 1, true);
+                SeEntry1.SetProfitTarget(2, 40000, 1.5, true);
+                SeEntry1.SetProfitTarget(3, 30000, 2, true);
+            }
+
+            SeEntry1.Call();
+
+            if (SeEntry1.SendEntry) SeLmt.Send(SeEntry1.LimitPrice, SeEntry1.Contracts);
+        }
+        private void SendMktEntry()
+        {
+            // successful
+            // send entry orders on closing tick
+            if (Bars.Status != EBarState.Close) return;
+
+            // long entry condition are valid
+            if (LeConditions() && LeEntry1.IsEntryOrderFilled == false && SeEntry1.IsEntryOrderFilled == false)
+            {
+                double close = Bars.Close[0];
+                double stop = CalcLowestLow(4);
+
+                // set stop loss, separate from entry order, sendentryorder() for entry info
+                LeEntry1.SetMarketOrder(close, 100000);
+                LeEntry1.SetStopLoss(stop - OnePip, false);
+                LeEntry1.SetProfitTarget(1, 30000, 1);
+                LeEntry1.SetProfitTarget(2, 40000, 1.5);
+                LeEntry1.SetProfitTarget(3, 30000, 2);
+
+                // send mkt always returns true, or change to SendEntryOrder()
+            }
+
+            LeEntry1.Call();
+
+            if (LeEntry1.SendEntry)
+                LeMkt.Send(LeEntry1.Contracts);
+
+            if (SeConditions() && SeEntry1.IsEntryOrderFilled == false && LeEntry1.IsEntryOrderFilled == false)
+            {
+                double close = Bars.Close[0];
+                double stop = CalcHighestHigh(4);
+
+                SeEntry1.SetMarketOrder(close, 100000);
+                SeEntry1.SetStopLoss(stop + OnePip, false);
+                SeEntry1.SetProfitTarget(1, 30000, 1);
+                SeEntry1.SetProfitTarget(2, 40000, 1.5);
+                SeEntry1.SetProfitTarget(3, 30000, 2);
+            }
+
+            SeEntry1.Call();
+
+            if (SeEntry1.SendEntry)
+                SeMkt.Send(SeEntry1.Contracts);
+        }
+        private void SendStpStpEntry()
+        {
+            // normal strategy framework just use SendEntry()
+
+            // long entry conditions
+            if (LeConditions()
+                && LeEntry1.SendEntry == false
+                && LeEntry1.IsEntryOrderFilled == false
+                && SeEntry1.SendEntry == false
+                && SeEntry1.IsEntryOrderFilled == false
+                )
+            {
+                // entry 1 - short stop order
+                double stopPrice1 = Bars.Low[0] - (10 * OnePip);
+                SeEntry1.SetStopMarketOrder(stopPrice1, 100000, 100);
+                SeEntry1.SetStopLoss(stopPrice1 + (10 * OnePip), true);
+                SeEntry1.SetProfitTarget(1, 30000, 1, true);
+                SeEntry1.SetProfitTarget(2, 40000, 1.5, true);
+                SeEntry1.SetProfitTarget(3, 30000, 2, true);
+
+                // entry 2 - stop order
+                double stopPrice2 = Bars.High[0] + (10 * OnePip);
+                LeEntry1.SetStopMarketOrder(stopPrice2, 100000, 100);
+                LeEntry1.SetStopLoss(stopPrice2 - (10 * OnePip), true);
+                LeEntry1.SetProfitTarget(1, 30000, 1, true);
+                LeEntry1.SetProfitTarget(2, 40000, 1.5, true);
+                LeEntry1.SetProfitTarget(3, 30000, 2, true);
+            }
+
+            // call function for calculations
+            LeEntry1.Call();
+            SeEntry1.Call();
+
+            // order cancel order
+            LeEntry1.OCO(SeEntry1);
+
+            // if both true then send orders
+            if (LeEntry1.SendEntry && SeEntry1.SendEntry)
+            {
+                SeStp.Send(SeEntry1.StopPrice, SeEntry1.Contracts);
+                LeStp.Send(LeEntry1.StopPrice, LeEntry1.Contracts);
+            }
+        }
+        private void SendStpLmtEntry()
+        {
+            // normal strategy framework just use SendEntry()
+
+            // long entry conditions
+            if (LeConditions()
+                && LeEntry1.SendEntry == false
+                && LeEntry1.IsEntryOrderFilled == false
+                && LeEntry2.SendEntry == false
+                && LeEntry2.IsEntryOrderFilled == false
+                && SeEntry1.SendEntry == false
+                && SeEntry1.IsEntryOrderFilled == false
+                && SeEntry2.SendEntry == false
+                && SeEntry2.IsEntryOrderFilled == false
+                )
+            {
+                // entry 1 - limit order
+                double limitPrice = Bars.Low[0] - (10 * OnePip);
+                LeEntry1.SetLimitOrder(limitPrice, 100000, 100);
+                LeEntry1.SetStopLoss(limitPrice - (10 * OnePip), true);
+                LeEntry1.SetProfitTarget(1, 30000, 1, true);
+                LeEntry1.SetProfitTarget(2, 40000, 1.5, true);
+                LeEntry1.SetProfitTarget(3, 30000, 2, true);
+
+                // entry 2 - stop order
+                double stopPrice = Bars.High[0] + (10 * OnePip);
+                LeEntry2.SetStopMarketOrder(stopPrice, 100000, 100);
+                LeEntry2.SetStopLoss(stopPrice - (10 * OnePip), true);
+                LeEntry2.SetProfitTarget(1, 30000, 1, true);
+                LeEntry2.SetProfitTarget(2, 40000, 1.5, true);
+                LeEntry2.SetProfitTarget(3, 30000, 2, true);
+            }
+
+            // call function for calculations
+            LeEntry1.Call();
+            LeEntry2.Call();
+
+            // order cancel order
+            LeEntry1.OCO(LeEntry2);
+
+            // if both true then send orders
+            if (LeEntry1.SendEntry && LeEntry2.SendEntry)
+            {
+                LeLmt.Send(LeEntry1.LimitPrice, LeEntry1.Contracts);
+                LeStp.Send(LeEntry2.StopPrice, LeEntry2.Contracts);
+            }
+
+            // short entry conditions
+            if (SeConditions()
+                && LeEntry1.SendEntry == false
+                && LeEntry1.IsEntryOrderFilled == false
+                && LeEntry2.SendEntry == false
+                && LeEntry2.IsEntryOrderFilled == false
+                && SeEntry1.SendEntry == false
+                && SeEntry1.IsEntryOrderFilled == false
+                && SeEntry2.SendEntry == false
+                && SeEntry2.IsEntryOrderFilled == false
+                )
+            {
+                // entry 1 - limit order
+                double limitPrice = Bars.High[0] + (10 * OnePip);
+                SeEntry1.SetLimitOrder(limitPrice, 100000, 100);
+                SeEntry1.SetStopLoss(limitPrice + (10 * OnePip), true);
+                SeEntry1.SetProfitTarget(1, 30000, 1, true);
+                SeEntry1.SetProfitTarget(2, 40000, 1.5, true);
+                SeEntry1.SetProfitTarget(3, 30000, 2, true);
+
+                // entry 2 - stop order
+                double stopPrice = Bars.Low[0] - (10 * OnePip);
+                SeEntry2.SetStopMarketOrder(stopPrice, 100000, 100);
+                SeEntry2.SetStopLoss(stopPrice + (10 * OnePip), true);
+                SeEntry2.SetProfitTarget(1, 30000, 1, true);
+                SeEntry2.SetProfitTarget(2, 40000, 1.5, true);
+                SeEntry2.SetProfitTarget(3, 30000, 2, true);
+            }
+
+            // call function for calculations
+            SeEntry1.Call();
+            SeEntry2.Call();
+
+            // order cancel order
+            SeEntry1.OCO(SeEntry2);
+
+            // if both true then send orders
+            if (SeEntry1.SendEntry && SeEntry2.SendEntry)
+            {
+                SeLmt.Send(SeEntry1.LimitPrice, SeEntry1.Contracts);
+                SeStp.Send(SeEntry2.StopPrice, SeEntry2.Contracts);
+            }
+        }
+        private void SendExitOrders()
+        {
+            if (LeEntry1.SendStopLoss)
+            {
+                LxStp.Send(LeEntry1.StopLossPrice);
+            }
+
+            if (LeEntry1.SendProfit1)
+            {
+                LePft1.Send(LeEntry1.ProfitPrice1, LeEntry1.ProfitQty1);
+            }
+
+            if (LeEntry1.SendProfit2)
+            {
+                LePft2.Send(LeEntry1.ProfitPrice2, LeEntry1.ProfitQty2);
+            }
+
+            if (LeEntry1.SendProfit3)
+            {
+                LePft3.Send(LeEntry1.ProfitPrice3, LeEntry1.ProfitQty3);
+            }
+
+            if (LeEntry2.SendStopLoss)
+            {
+                LxStp.Send(LeEntry2.StopLossPrice);
+            }
+
+            if (LeEntry2.SendProfit1)
+            {
+                LePft1.Send(LeEntry2.ProfitPrice1, LeEntry2.ProfitQty1);
+            }
+
+            if (LeEntry2.SendProfit2)
+            {
+                LePft2.Send(LeEntry2.ProfitPrice2, LeEntry2.ProfitQty2);
+            }
+
+            if (LeEntry2.SendProfit3)
+            {
+                LePft3.Send(LeEntry2.ProfitPrice3, LeEntry2.ProfitQty3);
+            }
+
+            if (SeEntry1.SendStopLoss)
+            {
+                SxStp.Send(SeEntry1.StopLossPrice);
+            }
+
+            if (SeEntry1.SendProfit1)
+            {
+                SePft1.Send(SeEntry1.ProfitPrice1, SeEntry1.ProfitQty1);
+            }
+
+            if (SeEntry1.SendProfit2)
+            {
+                SePft2.Send(SeEntry1.ProfitPrice2, SeEntry1.ProfitQty2);
+            }
+
+            if (SeEntry1.SendProfit3)
+            {
+                SePft3.Send(SeEntry1.ProfitPrice3, SeEntry1.ProfitQty3);
+            }
+
+            if (SeEntry2.SendStopLoss)
+            {
+                SxStp.Send(SeEntry2.StopLossPrice);
+            }
+
+            if (SeEntry2.SendProfit1)
+            {
+                SePft1.Send(SeEntry2.ProfitPrice1, SeEntry2.ProfitQty1);
+            }
+
+            if (SeEntry2.SendProfit2)
+            {
+                SePft2.Send(SeEntry2.ProfitPrice2, SeEntry2.ProfitQty2);
+            }
+
+            if (SeEntry2.SendProfit3)
+            {
+                SePft3.Send(SeEntry2.ProfitPrice3, SeEntry2.ProfitQty3);
+            }
+
+        }
+        #endregion
+
+        #endregion
+
+        #region Strategy Conditions
+
+        public double CalcLowestLow(int bars)
+        {
+            // bars has to be 1 or greater
+            if (bars <= 0) return 0;
+
+            double low = double.MaxValue;
+
+            // get the ten bar high value
+            for (int i = 0; i < bars; i++)
+                low = Math.Min(low, Bars.Low[i]);
+
+            return low;
+        }
+        public double CalcHighestHigh(int bars)
+        {
+            // bars has to be 1 or greater
+            if (bars <= 0) return 0;
+
+            double high = 0;
+
+            // get the ten bar high value, include current high
+            for (int i = 0; i < bars; i++)
+                high = Math.Max(high, Bars.High[i]);
+
+            return high;
+        }
+        private bool LeConditions()
+        {
+            if (PamaBottom() && BarHighBreak(8))
+                return true;
+
+            return false;
+        }
+
+        private bool SeConditions()
+        {
+            return PamaPeak() && BarLowBreak(8) ? true : false;
+        }
+        private bool PamaBottom()
+        {
+            if (Pama1[0] > Pama1[1] && Pama1[1] < Pama1[2])
+                return true;
+
+            return false;
+        }
+        private bool PamaPeak()
+        {
+            if (Pama1[0] < Pama1[1] && Pama1[1] > Pama1[2])
+                return true;
+
+            return false;
+        }
+        private bool BarHighBreak(int bars)
+        {
+            double high = 0;
+
+            // get the ten bar high value, exclude current high
+            for (int i = 1; i <= bars; i++)
+                high = Math.Max(high, Bars.High[i]);
+
+            // if current close > 10 bar high, return true
+            return Bars.Close[0] > high;
+        }
+
+        private bool BarLowBreak(int bars)
+        {
+            double low = double.MaxValue;
+
+            // get the ten bar high value, exclude current high
+            for (int i = 1; i <= bars; i++)
+                low = Math.Min(low, Bars.Low[i]);
+
+            // if current close > 10 bar high, return true
+            return Bars.Close[0] < low;
+        }
+        #endregion
+
+        #region Print Functions
+        private bool DebugMode = true;
+        private void Print(string message)
+        {
+            // print messages if debug mode == true.
+            if (DebugMode == false) return;
+
+            // Print who is calling Print()
+            StackTrace stackTrace = new StackTrace();
+
+            Output.WriteLine("Project:  {0}   |   Caller:  {1}   |   Bar Time:  {2}   |   Message:  {3}",
+                Name,
+                stackTrace.GetFrame(1).GetMethod().Name,
+                Bars.TimeValue.ToString("dd-MM-yy HH:mm:ss tt"),
+                message);
+        }
+        #endregion
+    }
+
+    #endregion
+
+    #region Strategy - Price Pattern v31
+    public class __SherNing_PricePatterns_v31 : SignalObject
     {
         //=========================================================================================
         // Project Name : Price Patterns
@@ -44,7 +684,7 @@ namespace PowerLanguage.Strategy
 
         // strategy inputs
         [Input] public bool ShowPriceLevels { get; set; }
-        public __SherNing_PricePatterns(object _ctx) : base(_ctx)
+        public __SherNing_PricePatterns_v31(object _ctx) : base(_ctx)
         {
             ShowPriceLevels = true;
         }
@@ -192,7 +832,6 @@ namespace PowerLanguage.Strategy
                 //SendLmtEntry();
                 SendExitOrders();
             }
-
             //Debug();
         }
 
@@ -736,8 +1375,6 @@ namespace PowerLanguage.Strategy
 
             if (SeEntry1.SendEntry)
                 SeMkt.Send(SeEntry1.Contracts);
-
-            //Debug();
         }
         #endregion
 
@@ -2227,7 +2864,7 @@ namespace PowerLanguage.Strategy
 
 namespace PowerLanguage.Function
 {
-    #region Function - Trade Info v42
+    #region Function - Trade Info v43
     public sealed class TradeInfo : FunctionSimple<int>
     {
         #region Documentations
@@ -2235,10 +2872,10 @@ namespace PowerLanguage.Function
         // Project Name : TradeInfo
         // Description  : Understanding Strategy Orders. IOG and non-IOG
         // Type         : Function
-        // Version      : v4.2
-        // Date         : 15 - Aug - 2020
+        // Version      : v4.3
+        // Date         : 17 - Aug - 2020
         // Time Taken   : 
-        // Remarks      : Debug TradeInfo in current version
+        // Remarks      : Clean up, test and finalize
         //=========================================================================================
         // Copyright    : 2020, Sher Ning Quantitative Technologies           
         // License      : Nil
@@ -2248,19 +2885,16 @@ namespace PowerLanguage.Function
 
         /*/
          *--------------------------------------- Objectives --------------------------------------
-         *  4.2.1 - Bar 2956, stop loss incorrect
-         *  4.2.2 - Bar 11629, entry bar, no entry
-         *  
-         *  Notes:
-         *  Most of the problems happen when entry and exit is on the same bar. 
-         *  Read everest to see if there is a potential solution to this problem
-         *  Read documentation to see if it is a back testing issue
+         *  4.3.1 - Clean and test final version
          *--------------------------------------- Objectives --------------------------------------
         /*/
 
         #region Version History
         /*/
          *---------------------------------------- Versions ---------------------------------------
+         *  4.2.1 - Bar 2956, stop loss incorrect
+         *  4.2.2 - Bar 11629, entry bar, no entry
+         *  
          *  4.1.1 - fix when price gaps above or below exit lines - successful
          *  4.1.2 - IOG stop and limit orders - successful
          *  4.1.3 - stop limit long entry - successful
@@ -2308,7 +2942,6 @@ namespace PowerLanguage.Function
         public double ProfitPrice1 { get; set; }
         public int ProfitQty1 { get; set; }
         public bool SendProfit1 { get; private set; }
-
 
         // profit 2 properties
         public double ProfitPrice2 { get; set; }
@@ -2436,6 +3069,1067 @@ namespace PowerLanguage.Function
         #region Entry Order Logic
         DateTime CurrentTime;
         public bool OCO(TradeInfo other)
+        {
+            // returns true when EITHER entry is filled
+            if (other.IsEntryOrderFilled)
+            {
+                CancelOrder();
+                return true;
+            }
+
+            // if current entry is filled, cancel other entry
+            else if (IsEntryOrderFilled)
+            {
+                other.CancelOrder();
+                return true;
+            }
+
+            return false;
+        }
+        private void LongEntry()
+        {
+            // entry order has not been filled
+            if (IsEntryOrderFilled == false)
+            {
+                bool closingTick = Bars.Status == EBarState.Close;
+                bool optimizing = Environment.Optimizing;
+                DateTime time = Bars.Time[0];
+
+                // limit order entry is true, and 
+                if (LimitPrice > 0 && StopPrice <= 0)
+                {
+                    EntryPrice = LimitPrice;
+
+                    // limit order filled
+                    if (Bars.Low[0] <= EntryPrice && MarketPosition[0] > 0)
+                    {
+                        IsEntryOrderFilled = true;
+                        CancelEntryOrder();
+                        return;
+                    }
+
+                    // else, display the entry order line
+                    else
+                    {
+                        SendEntry = true;
+
+                        // display entry price on closing tick when not optimizing
+                        if (DisplayEntry && closingTick && !optimizing)
+                        {
+                            ChartPoint p = new ChartPoint(Bars.Time[0], EntryPrice);
+                            ITextObject txt = DrwText.Create(p, "-");
+                            txt.Color = Color.LimeGreen;
+
+                            if (PrintEntryTxtOnce == false)
+                            {
+                                ChartPoint pt = new ChartPoint(
+                                    Bars.FullSymbolData.Time[-1], EntryPrice + (TxtDisplace * OnePip));
+                                ITextObject text = DrwText.Create(pt, "LE");
+                                text.Color = Color.LimeGreen;
+                                PrintEntryTxtOnce = true;
+                            }
+                        }
+
+                        // time in force, once per bar, regardless how many time calcbar is called
+                        if (time != CurrentTime)
+                        {
+                            // this is equivalent to opening tick, but called only once
+                            CurrentTime = time;
+                            TimeInForce--;
+                        }
+                    }
+
+                    // time in force for limit order
+                    if (TimeInForce == 1) CancelOrder();
+                }
+
+                // stop order entry is true
+                if (StopPrice > 0 && LimitPrice <= 0)
+                {
+                    EntryPrice = StopPrice;
+
+                    // stop order filled
+                    if (Bars.High[0] >= EntryPrice && MarketPosition[0] > 0)
+                    {
+                        IsEntryOrderFilled = true;
+                        CancelEntryOrder();
+                        return;
+                    }
+
+                    // else, display the entry order line
+                    else
+                    {
+                        SendEntry = true;
+
+                        // display entry price on closing tick when not optimizing
+                        if (DisplayEntry && closingTick && !optimizing)
+                        {
+                            ChartPoint p = new ChartPoint(Bars.Time[0], EntryPrice);
+                            ITextObject txt = DrwText.Create(p, "-");
+                            txt.Color = Color.DarkGreen;
+
+                            // plot text on entry line
+                            if (PrintEntryTxtOnce == false)
+                            {
+                                ChartPoint pt = new ChartPoint(
+                                    Bars.FullSymbolData.Time[-1], EntryPrice + (TxtDisplace * OnePip));
+                                ITextObject text = DrwText.Create(pt, "LE");
+                                text.Color = Color.DarkGreen;
+                                PrintEntryTxtOnce = true;
+                            }
+                        }
+
+                        // time in force, once per bar, regardless how many time calcbar is called
+                        if (time != CurrentTime)
+                        {
+                            // this is equivalent to opening tick, but called only once
+                            CurrentTime = time;
+                            TimeInForce--;
+                        }
+                    }
+
+                    // time in force for limit order
+                    if (TimeInForce == 1) CancelOrder();
+                }
+
+                // market order entry is true
+                if (StopPrice <= 0 && LimitPrice <= 0)
+                {
+                    if (EntryPrice > 0)
+                        SendEntry = true;
+
+                    // market order filled
+                    if (MarketPosition[0] > 0)
+                    {
+                        IsEntryOrderFilled = true;
+                        CancelEntryOrder();
+                        return;
+                    }
+                }
+            }
+        }
+        private void ShortEntry()
+        {
+            // entry order has not been filled
+            if (IsEntryOrderFilled == false)
+            {
+                bool closingTick = Bars.Status == EBarState.Close;
+                bool optimizing = Environment.Optimizing;
+                DateTime time = Bars.Time[0];
+
+                // limit order entry
+                if (LimitPrice > 0 && StopPrice <= 0)
+                {
+                    EntryPrice = LimitPrice;
+
+                    // short limit order filled, check mkt position if it is filled
+                    if (Bars.High[0] >= EntryPrice && MarketPosition[0] < 0)
+                    {
+                        IsEntryOrderFilled = true;
+                        CancelEntryOrder();
+                        return;
+                    }
+
+                    // else, display the entry order line
+                    else
+                    {
+                        SendEntry = true;
+
+                        // display entry price on closing tick when not optimizing
+                        if (DisplayEntry && closingTick && !optimizing)
+                            DisplayPriceLevels(EntryPrice, Color.Red, "SE", ref PrintEntryTxtOnce);
+
+                        // time in force, once per bar, regardless how many time calcbar is called
+                        if (time != CurrentTime)
+                        {
+                            // this is equivalent to opening tick, but called only once
+                            CurrentTime = time;
+                            TimeInForce--;
+                        }
+                    }
+
+                    // time in force for limit order
+                    if (TimeInForce == 1) CancelOrder();
+                }
+
+                // stop order entry
+                if (StopPrice > 0 && LimitPrice <= 0)
+                {
+                    EntryPrice = StopPrice;
+
+                    // short limit order filled
+                    if (Bars.Low[0] <= EntryPrice && MarketPosition[0] < 0)
+                    {
+                        IsEntryOrderFilled = true;
+                        CancelEntryOrder();
+                        return;
+                    }
+
+                    // else, display the entry order line
+                    else
+                    {
+                        SendEntry = true;
+
+                        // display entry price on closing tick when not optimizing
+                        if (DisplayEntry && closingTick && !optimizing)
+                            DisplayPriceLevels(EntryPrice, Color.DarkRed, "SE", ref PrintEntryTxtOnce);
+
+
+                        // time in force, once per bar, regardless how many time calcbar is called
+                        if (time != CurrentTime)
+                        {
+                            // this is equivalent to opening tick, but called only once
+                            CurrentTime = time;
+                            TimeInForce--;
+                        }
+                    }
+
+                    // time in force for limit order
+                    if (TimeInForce == 1) CancelOrder();
+                }
+
+                // market order entry is true
+                if (StopPrice <= 0 && LimitPrice <= 0)
+                {
+                    if (EntryPrice > 0)
+                        SendEntry = true;
+
+                    // market order filled
+                    if (MarketPosition[0] < 0)
+                    {
+                        IsEntryOrderFilled = true;
+                        CancelEntryOrder();
+                        return;
+                    }
+                }
+            }
+        }
+
+        #endregion
+
+        #region Exit Order Logic
+        private void LongExit()
+        {
+            // version 2.0
+            // use market position to determine state of trade
+
+            // local variables
+            int mp = MarketPosition[0];
+            bool closingTick = Bars.Status == EBarState.Close;
+            bool optimization = Environment.Optimizing;
+            double profitPrice;
+
+            // use current tick price for intra bar order generation
+            if (Environment.IOGEnabled)
+                profitPrice = Bars.Close[0];
+            else
+                profitPrice = Bars.High[0];
+
+            if (IsEntryOrderFilled)
+            {
+                // stop loss in used
+                if (StopLossPrice > 0)
+                {
+                    // conditions to send stop loss
+                    if (mp > 0)
+                    {
+                        // send stop loss on next tick or bar
+                        SendStopLoss = true;
+
+                        // print stop loss
+                        if (DisplayStopLoss && closingTick && optimization == false)
+                            DisplayPriceLevels(StopLossPrice, Color.Yellow, "SL", ref PrintStopLossTxtOnce);
+                    }
+
+                    // stop loss hit
+                    else
+                    {
+                        CancelExitOrder();
+                        return;
+                    }
+                }
+
+                // profit 1 in used
+                if (ProfitPrice1 > 0)
+                {
+                    if (profitPrice < ProfitPrice1)
+                    {
+                        SendProfit1 = true;
+
+                        if (DisplayProfits && closingTick && optimization == false)
+                            DisplayPriceLevels(ProfitPrice1, Color.Cyan, "P1", ref PrintProfit1TxtOnce);
+                    }
+
+                    else if (ProfitQty1 == (Contracts - mp))
+                    {
+                        // reset profit prices
+                        ProfitPrice1 = ProfitQty1 = 0;
+
+                        // reset stop and profits flags which triggers Send()
+                        SendProfit1 = false;
+
+                        // reset txt flags that plot exit txt
+                        PrintProfit1TxtOnce = false;
+
+                        Contracts = mp;
+                    }
+                }
+
+                // profit 2 in used
+                if (ProfitPrice2 > 0)
+                {
+                    if (profitPrice < ProfitPrice2)
+                    {
+                        SendProfit2 = true;
+
+                        if (DisplayProfits && closingTick && optimization == false)
+                            DisplayPriceLevels(ProfitPrice2, Color.Cyan, "P2", ref PrintProfit2TxtOnce);
+                    }
+
+                    else if (ProfitQty2 == (Contracts - mp))
+                    {
+                        // reset profit prices
+                        ProfitPrice2 = ProfitQty2 = 0;
+
+                        // reset stop and profits flags which triggers Send()
+                        SendProfit2 = false;
+
+                        // reset txt flags that plot exit txt
+                        PrintProfit2TxtOnce = false;
+
+                        Contracts = mp;
+                    }
+                }
+
+                // profit 3 in used
+                if (ProfitPrice3 > 0)
+                {
+                    // profit 3 hit
+                    if (profitPrice < ProfitPrice3)
+                    {
+                        SendProfit3 = true;
+
+                        if (DisplayProfits && closingTick && optimization == false)
+                            DisplayPriceLevels(ProfitPrice3, Color.Cyan, "P3", ref PrintProfit3TxtOnce);
+                    }
+
+                    else if (ProfitQty3 == (Contracts - mp))
+                    {
+                        // reset profit prices
+                        ProfitPrice3 = ProfitQty3 = 0;
+
+                        // reset stop and profits flags which triggers Send()
+                        SendProfit3 = false;
+
+                        // reset txt flags that plot exit txt
+                        PrintProfit3TxtOnce = false;
+
+                        Contracts = mp;
+                    }
+                }
+
+                // all profits targets hit
+                if (mp == 0
+                    && SendProfit1 == false
+                    && SendProfit2 == false
+                    && SendProfit3 == false)
+                {
+                    CancelExitOrder();
+                    return;
+                }
+            }
+        }
+        private void ShortExit()
+        {
+            // version 2.0
+            // use market position to determine state of trade
+
+            // local variables
+            int mp = MarketPosition[0];
+            bool closingTick = Bars.Status == EBarState.Close;
+            bool optimization = Environment.Optimizing;
+            double profitPrice;
+
+            // use current tick price for intra bar order generation
+            if (Environment.IOGEnabled)
+                profitPrice = Bars.Close[0];
+            else
+                profitPrice = Bars.Low[0];
+
+            if (IsEntryOrderFilled)
+            {
+                // stop loss in used
+                if (StopLossPrice > 0)
+                {
+                    // conditions to send stop loss
+                    if (mp < 0)
+                    {
+                        // send stop loss on next tick or bar
+                        SendStopLoss = true;
+
+                        // print stop loss
+                        if (DisplayStopLoss && closingTick && optimization == false)
+                            DisplayPriceLevels(StopLossPrice, Color.Yellow, "SL", ref PrintStopLossTxtOnce);
+                    }
+
+                    // stop loss hit
+                    else
+                    {
+                        CancelExitOrder();
+                        return;
+                    }
+                }
+
+                // profit 1 in used
+                if (ProfitPrice1 > 0)
+                {
+                    if (profitPrice > ProfitPrice1)
+                    {
+                        SendProfit1 = true;
+
+                        if (DisplayProfits && closingTick && optimization == false)
+                            DisplayPriceLevels(ProfitPrice1, Color.Cyan, "P1", ref PrintProfit1TxtOnce);
+                    }
+
+                    else if (ProfitQty1 == Math.Abs(Contracts + mp))
+                    {
+                        // reset profit prices
+                        ProfitPrice1 = ProfitQty1 = 0;
+
+                        // reset stop and profits flags which triggers Send()
+                        SendProfit1 = false;
+
+                        // reset txt flags that plot exit txt
+                        PrintProfit1TxtOnce = false;
+
+                        Contracts = Math.Abs(mp);
+                    }
+                }
+
+                // profit 2 in used
+                if (ProfitPrice2 > 0)
+                {
+                    if (profitPrice > ProfitPrice2)
+                    {
+                        SendProfit2 = true;
+
+                        if (DisplayProfits && closingTick && optimization == false)
+                            DisplayPriceLevels(ProfitPrice2, Color.Cyan, "P2", ref PrintProfit2TxtOnce);
+                    }
+
+                    else if (ProfitQty2 == Math.Abs(Contracts + mp))
+                    {
+                        // reset profit prices
+                        ProfitPrice2 = ProfitQty2 = 0;
+
+                        // reset stop and profits flags which triggers Send()
+                        SendProfit2 = false;
+
+                        // reset txt flags that plot exit txt
+                        PrintProfit2TxtOnce = false;
+
+                        Contracts = Math.Abs(mp);
+                    }
+                }
+
+                // profit 3 in used
+                if (ProfitPrice3 > 0)
+                {
+                    // profit 3 hit
+                    if (profitPrice > ProfitPrice3)
+                    {
+                        SendProfit3 = true;
+
+                        if (DisplayProfits && closingTick && optimization == false)
+                            DisplayPriceLevels(ProfitPrice3, Color.Cyan, "P3", ref PrintProfit3TxtOnce);
+                    }
+
+                    else if (ProfitQty3 == Math.Abs(Contracts + mp))
+                    {
+                        // reset profit prices
+                        ProfitPrice3 = ProfitQty3 = 0;
+
+                        // reset stop and profits flags which triggers Send()
+                        SendProfit3 = false;
+
+                        // reset txt flags that plot exit txt
+                        PrintProfit3TxtOnce = false;
+
+                        Contracts = Math.Abs(mp);
+                    }
+                }
+
+                // all profits targets hit
+                if (mp == 0
+                    && SendProfit1 == false
+                    && SendProfit2 == false
+                    && SendProfit3 == false)
+                {
+                    CancelExitOrder();
+                    return;
+                }
+            }
+        }
+        #endregion
+
+        #region Methods for Calculating Exit Prices
+        /// <summary>
+        /// Returns the profit price for the given risk reward, 
+        /// requires EntryPrice > 0 and StopLossPrice > 0
+        /// </summary>
+        /// <param name="riskReward"></param>
+        /// <returns></returns>
+        public double CalcProfitPrice(double riskReward)
+        {
+            double risk, profitPrice = 0;
+
+            // both entry price and stop loss price are valid
+            if (EntryPrice <= 0 && StopLossPrice <= 0) return profitPrice;
+
+            risk = Math.Abs(EntryPrice - StopLossPrice);
+
+            // long entry
+            if (TradeDirection == EMarketPositionSide.Long)
+                profitPrice = EntryPrice + (risk * riskReward);
+
+            // short entry
+            else if (TradeDirection == EMarketPositionSide.Short)
+                profitPrice = EntryPrice - (risk * riskReward);
+
+            // cannot cache profit(local) to ProfitPrice as there are 3 diff targets
+            return profitPrice;
+        }
+
+        /// <summary>
+        /// Returns the risk value, 
+        /// requires EntryPrice > 0 and StopLossPrice > 0, otherwise risk = 0
+        /// </summary>
+        /// <returns></returns>
+        public double CalcRiskValue()
+        {
+            // both entry price and stop loss price are valid
+            if (EntryPrice <= 0 && StopLossPrice <= 0) return 0;
+
+            return Math.Abs(EntryPrice - StopLossPrice);
+        }
+        /// <summary>
+        /// Returns the lowest low for the given number of bars 
+        /// (include current bar), offset by number of pips
+        /// </summary>
+        /// <param name="bars"></param>
+        /// <returns></returns>
+        public double CalcLowestLow(int bars, int pips = 0)
+        {
+            // bars has to be 1 or greater
+            if (bars <= 0) return 0;
+
+            double low = double.MaxValue;
+
+            // get the ten bar high value
+            for (int i = 0; i < bars; i++)
+                low = Math.Min(low, Bars.Low[i]);
+
+            return low - (pips * OnePip);
+        }
+        /// <summary>
+        /// Returns the highest high for the given number of bars 
+        /// (include current bar)
+        /// </summary>
+        /// <param name="bars"></param>
+        /// <returns></returns>
+        public double CalcHighestHigh(int bars, int pips = 0)
+        {
+            // bars has to be 1 or greater
+            if (bars <= 0) return 0;
+
+            double high = 0;
+
+            // get the ten bar high value, include current high
+            for (int i = 0; i < bars; i++)
+                high = Math.Max(high, Bars.High[i]);
+
+            return high + (pips * OnePip);
+        }
+        #endregion
+
+        #region Set Properties
+        public void SetProfitTarget(int target, int quantity, double riskReward)
+        {
+            double risk, profitPrice = 0;
+
+            // both entry price and stop loss price are valid
+            if (EntryPrice <= 0 && StopLossPrice <= 0) return;
+
+            risk = Math.Abs(EntryPrice - StopLossPrice);
+
+            // long entry
+            if (TradeDirection == EMarketPositionSide.Long)
+                profitPrice = EntryPrice + (risk * riskReward);
+
+            // short entry
+            else if (TradeDirection == EMarketPositionSide.Short)
+                profitPrice = EntryPrice - (risk * riskReward);
+
+            SetProfitPrice(target, profitPrice, quantity);
+        }
+        public void SetProfitTarget(int target, int quantity, double riskReward, bool lockPrice)
+        {
+            double risk, profitPrice = 0;
+
+            // both entry price and stop loss price are valid
+            if (EntryPrice <= 0 && StopLossPrice <= 0) return;
+
+            risk = Math.Abs(EntryPrice - StopLossPrice);
+
+            // long entry
+            if (TradeDirection == EMarketPositionSide.Long)
+                profitPrice = EntryPrice + (risk * riskReward);
+
+            // short entry
+            else if (TradeDirection == EMarketPositionSide.Short)
+                profitPrice = EntryPrice - (risk * riskReward);
+
+            SetProfitPrice(target, profitPrice, quantity, lockPrice);
+        }
+        public void SetProfitPrice(int target, double price, int quantity)
+        {
+            switch (target)
+            {
+                // profit target 1
+                case 1:
+                    ProfitPrice1 = price;
+                    ProfitQty1 = quantity;
+                    break;
+
+                // profit target 2
+                case 2:
+                    ProfitPrice2 = price;
+                    ProfitQty2 = quantity;
+                    break;
+
+                // profit target 3
+                case 3:
+                    ProfitPrice3 = price;
+                    ProfitQty3 = quantity;
+                    break;
+
+                default:
+                    break;
+            }
+        }
+        public void SetProfitPrice(int target, double price, int quantity, bool lockPrice)
+        {
+            switch (target)
+            {
+                // profit target 1
+                case 1:
+                    if (lockPrice && ProfitPrice1Lock == false)
+                    {
+                        ProfitPrice1 = price;
+                        ProfitQty1 = quantity;
+                        ProfitPrice1Lock = true;
+                    }
+                    break;
+
+                // profit target 2
+                case 2:
+                    if (lockPrice && ProfitPrice2Lock == false)
+                    {
+                        ProfitPrice2 = price;
+                        ProfitQty2 = quantity;
+                        ProfitPrice2Lock = true;
+                    }
+                    break;
+
+                // profit target 3
+                case 3:
+                    if (lockPrice && ProfitPrice3Lock == false)
+                    {
+                        ProfitPrice3 = price;
+                        ProfitQty3 = quantity;
+                        ProfitPrice3Lock = true;
+                    }
+                    break;
+
+                default:
+                    break;
+            }
+        }
+        public void SetMarketOrder(double entry, int contracts)
+        {
+            EntryPrice = entry;
+            Contracts = contracts;
+            IsEntryOrderFilled = false;
+        }
+        public void SetStopLoss(double stoploss, bool lockPrice)
+        {
+            // set stop loss price only once
+            if (lockPrice && StopLossPriceLock == false)
+            {
+                StopLossPrice = stoploss;
+                StopLossPriceLock = true;
+            }
+            else
+            {
+                StopLossPrice = stoploss;
+            }
+        }
+        public void SetLimitOrder(double limitPrice, int contracts, int timeInForce = 999)
+        {
+            // do this only once
+            if (EntryPriceLock == false)
+            {
+                LimitPrice = EntryPrice = limitPrice;
+                Contracts = contracts;
+
+                // time in force defaults to 999 bars
+                TimeInForce = timeInForce;
+                EntryPriceLock = true;
+                IsEntryOrderFilled = false;
+            }
+        }
+        public void SetStopMarketOrder(double stopPrice, int contracts, int timeInForce = 999)
+        {
+            // lock entry price, prevent updating
+            if (EntryPriceLock == false)
+            {
+                StopPrice = EntryPrice = stopPrice;
+                Contracts = contracts;
+
+                // time in force defaults to 999 bars
+                TimeInForce = timeInForce;
+                EntryPriceLock = true;
+                IsEntryOrderFilled = false;
+            }
+        }
+        #endregion
+
+        #region Debug
+        public void Debug(int start, int bars)
+        {
+            int maxBars = ExecInfo.MaxBarsBack;
+            start -= maxBars;
+
+            if (Bars.CurrentBar >= start && Bars.CurrentBar <= start + bars)
+            {
+                Print("Chart Bar Number: " + (Bars.CurrentBar + maxBars));
+                Debug();
+            }
+        }
+        public void Debug(int start, int bars, string name)
+        {
+            int maxBars = ExecInfo.MaxBarsBack;
+            start -= maxBars;
+
+            if (Bars.CurrentBar >= start
+                && Bars.CurrentBar <= start + bars
+                && EntryName == name)
+            {
+                Print("Chart Bar Number: " + (Bars.CurrentBar + maxBars));
+                Debug();
+            }
+        }
+        public void Debug()
+        {
+            // entry info
+            Print("Class Name: " + EntryName);
+            Print("Bar Status: " + Bars.Status);
+            Print("Time in Force: " + TimeInForce);
+            Print("Entry Order Filled: " + IsEntryOrderFilled);
+            Print("Send Entry Order: " + SendEntry);
+            Print("Entry Price: " + EntryPrice);
+            Print("Stop Price: " + StopPrice);
+            Print("Limit Price: " + LimitPrice);
+            Output.WriteLine("");
+
+            // exit info
+            Print("Send Stop Loss: " + SendStopLoss);
+            Print("Stop Loss Price: " + StopLossPrice);
+            Print("Send Profit 1: " + SendProfit1);
+            Print("Profit Price 1: " + ProfitPrice1);
+            Print("Profit Qty 1: " + ProfitQty1);
+            Print("Send Profit 2: " + SendProfit2);
+            Print("Profit Price 2: " + ProfitPrice2);
+            Print("Profit Qty 2: " + ProfitQty2);
+            Print("Send Profit 3: " + SendProfit3);
+            Print("Profit Price 3: " + ProfitPrice3);
+            Print("Profit Qty 3: " + ProfitQty3);
+            Output.WriteLine("");
+
+            // postion info
+            Print("Contracts: " + Contracts);
+            Print("Market Position: " + MarketPosition[0]);
+            Print("IOG Enabled: " + Environment.IOGEnabled);
+            Output.WriteLine("");
+
+            // bar info
+            Print("High: " + Bars.High[0]);
+            Print("Low: " + Bars.Low[0]);
+            Print("Open: " + Bars.Open[0]);
+            Print("Close: " + Bars.Close[0]);
+            Output.WriteLine("");
+            Output.WriteLine("");
+        }
+        private void DisplayPriceLevels(double price, Color color, string text, ref bool printOnce)
+        {
+            DateTime time = Bars.Time[0];
+
+            // check if fields are reference types, otherwise pass by ref
+            ChartPoint p = new ChartPoint(time, price);
+            ITextObject txt = DrwText.Create(p, "-");
+            txt.Color = color;
+
+            // plot this only once
+            if (printOnce == false)
+            {
+                ChartPoint x = new ChartPoint(
+                    Bars.FullSymbolData.Time[-1], price + (OnePip * TxtDisplace));
+
+                ITextObject t = DrwText.Create(x, text);
+                t.Color = color;
+                printOnce = true;
+            }
+        }
+
+        #endregion
+
+        #region Print Functions
+        private bool DebugMode = true;
+        private void Print(string message)
+        {
+            // print messages if debug mode == true.
+            if (DebugMode == false) return;
+
+            // Print who is calling Print()
+            StackTrace stackTrace = new StackTrace();
+
+            Output.WriteLine("Project:  {0}   |   Caller:  {1}   |   Bar Time:  {2}   |   Message:  {3}",
+                Name,
+                stackTrace.GetFrame(1).GetMethod().Name,
+                Bars.TimeValue.ToString("dd-MM-yy HH:mm:ss tt"),
+                message);
+        }
+
+        private void Print(string message, int chartbarNum)
+        {
+            int maxbars = ExecInfo.MaxBarsBack;
+            if (Bars.CurrentBar == chartbarNum - maxbars)
+                Print(message);
+        }
+        #endregion
+    }
+
+    #endregion
+
+    #region Function - Trade Info v42
+    public sealed class TradeInfo_v42 : FunctionSimple<int>
+    {
+        #region Documentations
+        //=========================================================================================
+        // Project Name : TradeInfo
+        // Description  : Understanding Strategy Orders. IOG and non-IOG
+        // Type         : Function
+        // Version      : v4.2
+        // Date         : 15 - Aug - 2020
+        // Time Taken   : 
+        // Remarks      : Debug TradeInfo in current version
+        //=========================================================================================
+        // Copyright    : 2020, Sher Ning Quantitative Technologies           
+        // License      : Nil
+        // Client       : Nil
+        // Details      : sherning@hotmail.com
+        //=========================================================================================
+
+        /*/
+         *--------------------------------------- Objectives --------------------------------------
+         *  4.2.1 - Bar 2956, stop loss incorrect
+         *  4.2.2 - Bar 11629, entry bar, no entry
+         *  
+         *  Notes:
+         *  Most of the problems happen when entry and exit is on the same bar. 
+         *  Read everest to see if there is a potential solution to this problem
+         *  Read documentation to see if it is a back testing issue
+         *--------------------------------------- Objectives --------------------------------------
+        /*/
+
+        #region Version History
+        /*/
+         *---------------------------------------- Versions ---------------------------------------
+         *  4.1.1 - fix when price gaps above or below exit lines - successful
+         *  4.1.2 - IOG stop and limit orders - successful
+         *  4.1.3 - stop limit long entry - successful
+         *  4.1.4 - stop limit short entry - successful
+         *  4.1.5 - Non-IOG trades - multiple profits requires IOG
+         *  4.1.6 - Update IsEntryFilled for Mkt Orders - done
+         *  4.0.1 - FunctionSeries vs FunctionSimple - done
+         *  4.0.2 - MarketPosition and PositionSide to improve accuracy
+         *  4.0.3 - Improve members' names
+         *  4.0.4 - Fields vs VariableObject
+         *  
+         *  3.2.1 - clean up stop limit order code - done
+         *  3.2.2 - test limit and stop order seperately - done
+         *  
+         *  3.1.1 complete long limit order entry debugging and refactorization - Successful
+         *  3.1.2 complete short limit order entry, updated new IOG Mode - Successful
+         *  3.1.3 add long stop order entry - Successful
+         *  3.1.4 add short stop order entry - Successful
+         *  3.1.5 add stop entry and stop limit entry - will not work
+         *  3.1.6 add double stop entry - will not work
+         *---------------------------------------- Versions ---------------------------------------
+        /*/
+        #endregion
+
+        #endregion
+
+        #region class properties
+        public string EntryName { get; private set; }
+        public EMarketPositionSide TradeDirection { get; private set; }
+
+        // entry and stop properties
+        public double EntryPrice { get; set; }
+        public double LimitPrice { get; private set; }
+        public double StopPrice { get; private set; }
+        public bool IsEntryOrderFilled { get; private set; }
+        public bool SendEntry { get; private set; }
+        public int TimeInForce { get; private set; }
+        public int Contracts { get; set; }
+
+        // stop loss properties
+        public double StopLossPrice { get; set; }
+        public bool SendStopLoss { get; private set; }
+
+        // profit 1 properties
+        public double ProfitPrice1 { get; set; }
+        public int ProfitQty1 { get; set; }
+        public bool SendProfit1 { get; private set; }
+
+
+        // profit 2 properties
+        public double ProfitPrice2 { get; set; }
+        public int ProfitQty2 { get; set; }
+        public bool SendProfit2 { get; private set; }
+
+        // profit 3 properties
+        public double ProfitPrice3 { get; set; }
+        public int ProfitQty3 { get; set; }
+        public bool SendProfit3 { get; private set; }
+
+        // display properties
+        public bool DisplayEntry { private get; set; }
+        public bool DisplayStopLoss { private get; set; }
+        public bool DisplayProfits { private get; set; }
+        #endregion
+
+        public TradeInfo_v42(CStudyControl m, EMarketPositionSide direction, string entryName)
+            : base(m)
+        {
+            TradeDirection = direction;
+            EntryName = entryName;
+        }
+
+        // fields - reference types
+        VariableSeries<int> MarketPosition;
+        protected override void Create()
+        {
+            // track market position
+            MarketPosition = new VariableSeries<int>(this);
+        }
+
+        // fields - value types
+        int TxtDisplace;
+        double OnePip;
+        bool PrintEntryTxtOnce, PrintStopLossTxtOnce;
+        bool PrintProfit1TxtOnce, PrintProfit2TxtOnce, PrintProfit3TxtOnce;
+        bool EntryPriceLock, StopLossPriceLock, ProfitPrice1Lock, ProfitPrice2Lock, ProfitPrice3Lock;
+        private void CancelOrder()
+        {
+            // position reset method below fields for easier reference
+            CancelEntryOrder();
+            CancelExitOrder();
+        }
+        private void CancelEntryOrder()
+        {
+            // reset entry data
+            EntryPrice = LimitPrice = StopPrice = 0;
+
+            // reset profit flags
+            ProfitPrice1Lock = ProfitPrice2Lock = ProfitPrice3Lock = false;
+
+            // reset entry and stop loss flags
+            EntryPriceLock = StopLossPriceLock = false;
+
+            // entry text
+            PrintEntryTxtOnce = false;
+
+            // reset flag to trigger Send()
+            SendEntry = false;
+
+            // reset time in force, max 999 bars only
+            TimeInForce = 0;
+        }
+        private void CancelExitOrder()
+        {
+            // reset stoploss 
+            StopLossPrice = 0;
+
+            // reset profit prices
+            ProfitPrice1 = ProfitPrice2 = ProfitPrice3 = 0;
+
+            // reset entry order flag
+            IsEntryOrderFilled = false;
+
+            // reset stop and profits flags which triggers Send()
+            SendStopLoss = SendProfit1 = SendProfit2 = SendProfit3 = false;
+
+            // reset contracts and exit quantity
+            Contracts = ProfitQty1 = ProfitQty2 = ProfitQty3 = 0;
+
+            // reset txt flags that plot exit txt
+            PrintStopLossTxtOnce = PrintProfit1TxtOnce = PrintProfit2TxtOnce = PrintProfit3TxtOnce = false;
+        }
+        protected override void StartCalc()
+        {
+            // one pip = 10 ticks
+            OnePip = (Bars.Info.BigPointValue / Bars.Info.PriceScale) * 10;
+
+            // distance between text and price levels, 1 = 1 pip
+            TxtDisplace = 1;
+
+            // reset
+            CancelOrder();
+        }
+        protected override int CalcBar()
+        {
+            // CStudyControl is passed in here.
+            if (StrategyInfo != null)
+                MarketPosition.Value = StrategyInfo.MarketPosition;
+
+            // get trade direction
+            switch (TradeDirection)
+            {
+                case EMarketPositionSide.Long:
+                    LongEntry();
+                    LongExit();
+                    break;
+
+                case EMarketPositionSide.Short:
+                    ShortEntry();
+                    ShortExit();
+                    break;
+
+                // Do nothing
+                default:
+                case EMarketPositionSide.Flat:
+                    break;
+            }
+
+            //Debug(7073, 2, "SE_2");
+            return MarketPosition[0];
+        }
+
+        #region Entry Order Logic
+        DateTime CurrentTime;
+        public bool OCO(TradeInfo_v42 other)
         {
             // returns true when EITHER entry is filled
             if (other.IsEntryOrderFilled)
