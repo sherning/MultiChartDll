@@ -62,7 +62,7 @@ namespace PowerLanguage.Strategy
         IOrderPriced LePft1, LePft2, LePft3;
         IOrderPriced SePft1, SePft2, SePft3;
 
-        TradeInfoSingle LeEntry1, LeEntry2, SeEntry1, SeEntry2;
+        TradeInfo LeEntry1, LeEntry2, SeEntry1, SeEntry2;
         VariableSeries<int> CurrentBars;
 
         protected override void Create()
@@ -70,10 +70,10 @@ namespace PowerLanguage.Strategy
             PricePattern = new PricePatternStrategy(this);
 
             // Trade Info Class
-            LeEntry1 = new TradeInfoSingle(this, EMarketPositionSide.Long, "LE_1");
-            LeEntry2 = new TradeInfoSingle(this, EMarketPositionSide.Long, "LE_2");
-            SeEntry1 = new TradeInfoSingle(this, EMarketPositionSide.Short, "SE_1");
-            SeEntry2 = new TradeInfoSingle(this, EMarketPositionSide.Short, "SE_2");
+            LeEntry1 = new TradeInfo(this, EMarketPositionSide.Long, "LE_1");
+            LeEntry2 = new TradeInfo(this, EMarketPositionSide.Long, "LE_2");
+            SeEntry1 = new TradeInfo(this, EMarketPositionSide.Short, "SE_1");
+            SeEntry2 = new TradeInfo(this, EMarketPositionSide.Short, "SE_2");
 
             CurrentBars = new VariableSeries<int>(this);
 
@@ -189,12 +189,10 @@ namespace PowerLanguage.Strategy
         #region Test Framework
         private void TestFramework1()
         {
-            // successful
-            if (Bars.Status != EBarState.Close) return;
-
             // long entry condition are valid
             if (Bars.CurrentBar % 101 == 0
-                && LeEntry1.IsEntryOrderFilled == false)
+                && LeEntry1.IsEntryOrderFilled == false
+                && Bars.Status == EBarState.Close)
             {
                 double close = Bars.Close[0];
                 double stop = close - (15 * OnePip);
@@ -213,7 +211,8 @@ namespace PowerLanguage.Strategy
                 LeMkt.Send(LeEntry1.Contracts);
 
             if (Bars.CurrentBar % 151 == 0
-                && SeEntry1.IsEntryOrderFilled == false)
+                && SeEntry1.IsEntryOrderFilled == false
+                && Bars.Status == EBarState.Close)
             {
                 double close = Bars.Close[0];
                 double stop = close + (15 * OnePip);
@@ -745,7 +744,7 @@ namespace PowerLanguage.Strategy
         IOrderPriced LePft1, LePft2, LePft3;
         IOrderPriced SePft1, SePft2, SePft3;
 
-        TradeInfoSingle LeEntry1, LeEntry2, SeEntry1, SeEntry2;
+        TradeInfo LeEntry1, LeEntry2, SeEntry1, SeEntry2;
         VariableSeries<int> CurrentBars;
 
         protected override void Create()
@@ -753,10 +752,10 @@ namespace PowerLanguage.Strategy
             PricePattern = new PricePatternStrategy(this);
 
             // Trade Info Class
-            LeEntry1 = new TradeInfoSingle(this, EMarketPositionSide.Long, "LE_1");
-            LeEntry2 = new TradeInfoSingle(this, EMarketPositionSide.Long, "LE_2");
-            SeEntry1 = new TradeInfoSingle(this, EMarketPositionSide.Short, "SE_1");
-            SeEntry2 = new TradeInfoSingle(this, EMarketPositionSide.Short, "SE_2");
+            LeEntry1 = new TradeInfo(this, EMarketPositionSide.Long, "LE_1");
+            LeEntry2 = new TradeInfo(this, EMarketPositionSide.Long, "LE_2");
+            SeEntry1 = new TradeInfo(this, EMarketPositionSide.Short, "SE_1");
+            SeEntry2 = new TradeInfo(this, EMarketPositionSide.Short, "SE_2");
 
             CurrentBars = new VariableSeries<int>(this);
 
@@ -2907,6 +2906,8 @@ namespace PowerLanguage.Strategy
 
 namespace PowerLanguage.Function
 {
+
+
     #region Function - Price Pattern Strategy
     public sealed class PricePatternStrategy : FunctionSimple<bool>
     {
