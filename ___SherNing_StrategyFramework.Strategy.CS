@@ -134,7 +134,27 @@ namespace PowerLanguage.Strategy
             }
         }
 
-        #region Print Functions
+        #region Send Entry
+        private void SendEntry() { }
+        #endregion
+
+        #region Send Exits
+        private void SendExits() { }
+        #endregion
+
+        #region Strategy Conditions
+        private void LongEntryConditions() { }
+        private void ShortEntryConditions() { }
+        #endregion
+
+        #region Debug
+        private void Debug()
+        {
+            // all the print statements in the context of current strategy
+        }
+        #endregion
+
+        #region Print
         private bool DebugMode = true;
         private void Print(string message)
         {
