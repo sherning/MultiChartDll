@@ -64,7 +64,6 @@ namespace PowerLanguage.Strategy
 
         TradeInfo LeEntry1, LeEntry2, SeEntry1, SeEntry2;
         VariableSeries<int> CurrentBars;
-
         protected override void Create()
         {
             PricePattern = new PricePatternStrategy(this);
@@ -2927,7 +2926,8 @@ namespace PowerLanguage.Function
 
         /*/
          *--------------------------------------- Objectives --------------------------------------
-         *  
+         *  6.1.0 - num of bars since entry, take into account IOG active and inactive
+         *  6.2.0 - IsEntryFilled
          *--------------------------------------- Objectives --------------------------------------
         /*/
 
@@ -3040,11 +3040,14 @@ namespace PowerLanguage.Function
 
         #region Reference Fields
         // fields - reference types
-        VariableSeries<int> MarketPosition;
+        VariableSeries<int> MarketPosition, CurrentBarOnChart;
+        VariableSeries<bool> IsEntryFilled;
         protected override void Create()
         {
             // track market position
             MarketPosition = new VariableSeries<int>(this);
+            IsEntryFilled = new VariableSeries<bool>(this);
+            CurrentBarOnChart = new VariableSeries<int>(this);
         }
         #endregion
 
@@ -3108,7 +3111,7 @@ namespace PowerLanguage.Function
             ProfitPrice1 = ProfitPrice2 = ProfitPrice3 = 0;
 
             // reset entry order flag
-            IsEntryOrderFilled = false;
+            IsEntryFilled.Value = IsEntryOrderFilled = false;
 
             // reset stop and profits flags which triggers Send()
             SendStopLoss = SendProfit1 = SendProfit2 = SendProfit3 = false;
@@ -3128,18 +3131,19 @@ namespace PowerLanguage.Function
         {
             // CStudyControl is passed to the base class which this class inherits
             MarketPosition.Value = StrategyInfo.MarketPosition;
+            CurrentBarOnChart.Value = Bars.CurrentBar + ExecInfo.MaxBarsBack;
 
             // get trade direction
             switch (TradeDirection)
             {
                 case EMarketPositionSide.Long:
-                    LongMarketPosition();
+                    LongStrategyState();
                     LongEntry();
                     LongExit();
                     break;
 
                 case EMarketPositionSide.Short:
-                    ShortMarketPosition();
+                    ShortStrategyState();
                     ShortEntry();
                     ShortExit();
                     break;
@@ -3155,7 +3159,7 @@ namespace PowerLanguage.Function
         }
 
         #region Track Market Position
-        private void LongMarketPosition()
+        private void LongStrategyState()
         {
             // version 1.0
 
@@ -3163,7 +3167,7 @@ namespace PowerLanguage.Function
             int mp = MarketPosition[0];
 
             // reversal order 
-            if (mp < 0 && IsEntryOrderFilled)
+            if (mp < 0 && IsEntryFilled[0])
             {
                 // cancel all long exit orders
                 CancelExitOrder();
@@ -3187,13 +3191,13 @@ namespace PowerLanguage.Function
                 MarketPositionChg = 0;
             }
         }
-        private void ShortMarketPosition()
+        private void ShortStrategyState()
         {
             // cache to local
             int mp = MarketPosition[0];
 
             // reversal order 
-            if (mp > 0 && IsEntryOrderFilled)
+            if (mp > 0 && IsEntryFilled[0])
             {
                 // cancel all long exit orders
                 CancelExitOrder();
@@ -3238,6 +3242,99 @@ namespace PowerLanguage.Function
             return false;
         }
         private void LongEntry()
+        {
+            // entry order has not been filled
+            if (IsEntryFilled[0] == false)
+            {
+                bool closingTick = Bars.Status == EBarState.Close;
+                bool optimizing = Environment.Optimizing;
+                DateTime time = Bars.Time[0];
+                int mp = MarketPosition[0];
+
+                // regardless of new entry or additional entry, mp must be > 0
+
+                // limit order entry is true, and 
+                if (LimitPrice > 0 && StopPrice <= 0)
+                {
+                    // limit order filled
+                    if (Bars.Low[0] <= EntryPrice && mp > 0)
+                    {
+                        //IsEntryOrderFilled = true;
+                        IsEntryFilled.Value = true;
+                        CancelEntryOrder();
+                        return;
+                    }
+
+                    // else, display the entry order line
+                    else
+                    {
+                        SendEntry = true;
+
+                        // display entry price on closing tick when not optimizing
+                        if (DisplayEntry && closingTick && !optimizing)
+                            DisplayPriceLevels(EntryPrice, Color.LimeGreen, "LE", ref PrintEntryTxtOnce);
+
+                        // time in force, once per bar, regardless how many time calcbar is called
+                        if (time != CurrentTime)
+                        {
+                            // this is equivalent to opening tick, but called only once
+                            CurrentTime = time;
+                            TimeInForce--;
+                        }
+                    }
+
+                    // time in force for limit order
+                    if (TimeInForce == 1) CancelOrder();
+                }
+
+                // stop order entry is true
+                if (StopPrice > 0 && LimitPrice <= 0)
+                {
+                    // stop order filled
+                    if (Bars.High[0] >= EntryPrice && mp > 0)
+                    {
+                        IsEntryFilled.Value = true;
+                        CancelEntryOrder();
+                        return;
+                    }
+
+                    // else, display the entry order line
+                    else
+                    {
+                        SendEntry = true;
+
+                        if (DisplayEntry && closingTick && !optimizing)
+                            DisplayPriceLevels(EntryPrice, Color.DarkGreen, "LE", ref PrintEntryTxtOnce);
+
+                        // time in force, once per bar, regardless how many time calcbar is called
+                        if (time != CurrentTime)
+                        {
+                            // this is equivalent to opening tick, but called only once
+                            CurrentTime = time;
+                            TimeInForce--;
+                        }
+                    }
+
+                    // time in force for limit order
+                    if (TimeInForce == 1) CancelOrder();
+                }
+
+                // market order entry is true
+                if (StopPrice <= 0 && LimitPrice <= 0 && EntryPrice > 0)
+                {
+                    SendEntry = true;
+
+                    if (mp > 0)
+                    {
+                        IsEntryFilled.Value = true;
+                        CancelEntryOrder();
+                        return;
+                    }
+                }
+            }
+        }
+
+        private void LongEntry1()
         {
             // entry order has not been filled
             if (IsEntryOrderFilled == false)
