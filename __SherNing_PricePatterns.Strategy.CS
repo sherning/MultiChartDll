@@ -63,7 +63,7 @@ namespace PowerLanguage.Strategy
         IOrderPriced SePft1, SePft2, SePft3;
 
         TradeInfo LeEntry1, LeEntry2, SeEntry1, SeEntry2;
-        VariableSeries<int> CurrentBars;
+        VariableObject<int> CurrentBars;
         protected override void Create()
         {
             PricePattern = new PricePatternStrategy(this);
@@ -74,7 +74,7 @@ namespace PowerLanguage.Strategy
             SeEntry1 = new TradeInfo(this, EMarketPositionSide.Short, "SE_1");
             SeEntry2 = new TradeInfo(this, EMarketPositionSide.Short, "SE_2");
 
-            CurrentBars = new VariableSeries<int>(this);
+            CurrentBars = new VariableObject<int>(this);
 
             // market entry
             LeMkt = OrderCreator.MarketNextBar(new SOrderParameters(
@@ -134,8 +134,10 @@ namespace PowerLanguage.Strategy
         // value fields 
         double OnePip;
         const int EnoughData = 1200;
+        int Count;
         protected override void StartCalc()
         {
+            Count = 0;
             PricePattern._Length = 6;
             PricePattern._Smooth = 10;
             OnePip = (Bars.Info.BigPointValue / Bars.Info.PriceScale) * 10;
@@ -183,6 +185,15 @@ namespace PowerLanguage.Strategy
                 //SendLmtEntry();
                 TestFramework1();
                 SendExitOrders();
+            }
+
+            CurrentBars.Value++;
+            Count++;
+
+            if (Bars.CurrentBar < 20 && Bars.Status == EBarState.Close)
+            {
+                Print("Current Bar:  " + CurrentBars[0]);
+                Print("Count:  " + Count);
             }
         }
         #region Test Framework
@@ -2905,7 +2916,7 @@ namespace PowerLanguage.Strategy
 
 namespace PowerLanguage.Function
 {
-    #region Function - Trade Info v60
+    #region Function - Trade Info v61
     public sealed class TradeInfo : FunctionSimple<int>
     {
         #region Documentations
@@ -2913,7 +2924,7 @@ namespace PowerLanguage.Function
         // Project Name : TradeInfo
         // Description  : Understanding Strategy Orders. IOG and non-IOG
         // Type         : Function
-        // Version      : v6.0
+        // Version      : v6.1
         // Date         : 24 - Aug - 2020
         // Time Taken   : 
         // Remarks      : TradeInfo Framework
@@ -2926,13 +2937,15 @@ namespace PowerLanguage.Function
 
         /*/
          *--------------------------------------- Objectives --------------------------------------
-         *  6.0.1 - Clean up current code.
+         *  6.1.0 - Run variable series test
          *--------------------------------------- Objectives --------------------------------------
         /*/
 
         #region Version History
         /*/
          *---------------------------------------- Versions ---------------------------------------
+         *  6.0.0 - Base Version
+         * 
          *  5.0.1 - Tracking the changes in MarketPosition
          *  5.0.2 - VariableSeries maxlookback == ExecInfo.MaxBarsBack 
          *  5.0.3 - New Mp update long - completed
@@ -2969,9 +2982,7 @@ namespace PowerLanguage.Function
 
         /*/
          *------------------------------------------ Notes ----------------------------------------
-         *  1. Improve source control with Functions() when working on a new logic 
-         *  2. VariableSeries look back period == MaxBarsBack
-         *  3. If possible, one function for each objectives, keep the functions until clean up
+         *  1. VariableSeries and Objects are only updated at the end of closing tick
          *------------------------------------------ Notes ----------------------------------------
         /*/
         #endregion
