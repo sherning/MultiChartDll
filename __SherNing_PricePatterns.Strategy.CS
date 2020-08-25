@@ -63,7 +63,6 @@ namespace PowerLanguage.Strategy
         IOrderPriced SePft1, SePft2, SePft3;
 
         TradeInfo LeEntry1, LeEntry2, SeEntry1, SeEntry2;
-        VariableObject<int> CurrentBars;
         protected override void Create()
         {
             PricePattern = new PricePatternStrategy(this);
@@ -73,8 +72,6 @@ namespace PowerLanguage.Strategy
             LeEntry2 = new TradeInfo(this, EMarketPositionSide.Long, "LE_2");
             SeEntry1 = new TradeInfo(this, EMarketPositionSide.Short, "SE_1");
             SeEntry2 = new TradeInfo(this, EMarketPositionSide.Short, "SE_2");
-
-            CurrentBars = new VariableObject<int>(this);
 
             // market entry
             LeMkt = OrderCreator.MarketNextBar(new SOrderParameters(
@@ -134,10 +131,8 @@ namespace PowerLanguage.Strategy
         // value fields 
         double OnePip;
         const int EnoughData = 1200;
-        int Count;
         protected override void StartCalc()
         {
-            Count = 0;
             PricePattern._Length = 6;
             PricePattern._Smooth = 10;
             OnePip = (Bars.Info.BigPointValue / Bars.Info.PriceScale) * 10;
@@ -186,16 +181,8 @@ namespace PowerLanguage.Strategy
                 TestFramework1();
                 SendExitOrders();
             }
-
-            CurrentBars.Value++;
-            Count++;
-
-            if (Bars.CurrentBar < 20 && Bars.Status == EBarState.Close)
-            {
-                Print("Current Bar:  " + CurrentBars[0]);
-                Print("Count:  " + Count);
-            }
         }
+
         #region Test Framework
         private void TestFramework1()
         {
@@ -2982,7 +2969,9 @@ namespace PowerLanguage.Function
 
         /*/
          *------------------------------------------ Notes ----------------------------------------
-         *  1. VariableSeries and Objects are only updated at the end of closing tick
+         *  1. VariableSeries are called and updated only on CLOSING tick
+         *  2. Use VariableSeries only when you need to access previous CLOSING tick values
+         *  3. FunctionSeries<T> is by default called only on CLOSING tick implicitly
          *------------------------------------------ Notes ----------------------------------------
         /*/
         #endregion
@@ -3043,10 +3032,13 @@ namespace PowerLanguage.Function
         #region Reference Fields
         // fields - reference types
         VariableSeries<int> MarketPosition;
+        VariableSeries<bool> EntryFilled;
         protected override void Create()
         {
             // track market position
             MarketPosition = new VariableSeries<int>(this);
+
+            EntryFilled = new VariableSeries<bool>(this);
         }
         #endregion
 
@@ -3112,6 +3104,8 @@ namespace PowerLanguage.Function
             // reset entry order flag
             IsEntryOrderFilled = false;
 
+            EntryFilled.Value = false;
+
             // reset stop and profits flags which triggers Send()
             SendStopLoss = SendProfit1 = SendProfit2 = SendProfit3 = false;
 
@@ -3152,7 +3146,11 @@ namespace PowerLanguage.Function
                     break;
             }
 
-            //Debug(24902, 2, "LE_1");
+            // find out what went wrong.
+            //if (IsEntryOrderFilled != EntryFilled[0] && TradeDirection == EMarketPositionSide.Long)
+            //    Print("Different entry filled");
+
+            //Debug(27926, 2, "LE_1");
             return MarketPosition[0];
         }
 
@@ -3232,6 +3230,7 @@ namespace PowerLanguage.Function
             else if (IsEntryOrderFilled)
             {
                 other.CancelOrder();
+              
                 return true;
             }
 
@@ -3249,12 +3248,11 @@ namespace PowerLanguage.Function
                 // limit order entry is true, and 
                 if (LimitPrice > 0 && StopPrice <= 0)
                 {
-                    EntryPrice = LimitPrice;
-
                     // limit order filled
                     if (Bars.Low[0] <= EntryPrice && MarketPosition[0] > 0)
                     {
                         IsEntryOrderFilled = true;
+                        EntryFilled.Value = true;
                         CancelEntryOrder();
                         return;
                     }
@@ -3284,12 +3282,11 @@ namespace PowerLanguage.Function
                 // stop order entry is true
                 if (StopPrice > 0 && LimitPrice <= 0)
                 {
-                    EntryPrice = StopPrice;
-
                     // stop order filled
                     if (Bars.High[0] >= EntryPrice && MarketPosition[0] > 0)
                     {
                         IsEntryOrderFilled = true;
+                        EntryFilled.Value = true;
                         CancelEntryOrder();
                         return;
                     }
@@ -3317,19 +3314,21 @@ namespace PowerLanguage.Function
                 }
 
                 // market order entry is true
-                if (StopPrice <= 0 && LimitPrice <= 0)
+                if (StopPrice <= 0 && LimitPrice <= 0 && EntryPrice > 0)
                 {
-                    if (EntryPrice > 0)
-                        SendEntry = true;
+                    SendEntry = true;
 
                     // change in mkt position positive
                     if (MarketPosition[0] > 0)
                     {
                         IsEntryOrderFilled = true;
+                        EntryFilled.Value = true;
                         CancelEntryOrder();
                         return;
                     }
                 }
+
+               
             }
         }
         private void ShortEntry()
@@ -3344,12 +3343,12 @@ namespace PowerLanguage.Function
                 // limit order entry
                 if (LimitPrice > 0 && StopPrice <= 0)
                 {
-                    EntryPrice = LimitPrice;
-
                     // short limit order filled, check mkt position if it is filled
                     if (Bars.High[0] >= EntryPrice && MarketPositionChg == -Contracts)
                     {
                         IsEntryOrderFilled = true;
+                        EntryFilled.Value = true;
+
                         CancelEntryOrder();
                         return;
                     }
@@ -3379,12 +3378,12 @@ namespace PowerLanguage.Function
                 // stop order entry
                 if (StopPrice > 0 && LimitPrice <= 0)
                 {
-                    EntryPrice = StopPrice;
-
                     // short limit order filled
                     if (Bars.Low[0] <= EntryPrice && MarketPositionChg == -Contracts)
                     {
                         IsEntryOrderFilled = true;
+                        EntryFilled.Value = true;
+
                         CancelEntryOrder();
                         return;
                     }
@@ -3421,6 +3420,8 @@ namespace PowerLanguage.Function
                     if (MarketPositionChg == -Contracts)
                     {
                         IsEntryOrderFilled = true;
+                        EntryFilled.Value = true;
+
                         CancelEntryOrder();
                         return;
                     }
@@ -3450,6 +3451,11 @@ namespace PowerLanguage.Function
 
             if (IsEntryOrderFilled)
             {
+                EntryFilled.Value = true;
+
+                if (IsEntryOrderFilled != EntryFilled[0] && TradeDirection == EMarketPositionSide.Long)
+                    Print("Different entry filled");
+
                 // stop loss in used
                 if (StopLossPrice > 0)
                 {
@@ -3959,6 +3965,7 @@ namespace PowerLanguage.Function
             Print("Bar Status: " + Bars.Status);
             Print("Time in Force: " + TimeInForce);
             Print("Entry Order Filled: " + IsEntryOrderFilled);
+            Print("Entry Order Status: " + EntryFilled[0]);
             Print("Send Entry Order: " + SendEntry);
             Print("Entry Price: " + EntryPrice);
             Print("Stop Price: " + StopPrice);
