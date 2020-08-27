@@ -9,7 +9,7 @@ using System.Collections.Generic;
 namespace PowerLanguage.Strategy
 {
     #region Strategy - Price Pattern v32
-    [IOGMode(IOGMode.Enabled)]
+    [IOGMode(IOGMode.Disabled)]
     public class __SherNing_PricePatterns : SignalObject
     {
         //=========================================================================================
@@ -63,8 +63,16 @@ namespace PowerLanguage.Strategy
         IOrderPriced SePft1, SePft2, SePft3;
 
         TradeInfo LeEntry1, LeEntry2, SeEntry1, SeEntry2;
+
+        TradeInfo[] TradeInfoArr;
+        TradeInfo TestTrade;
         protected override void Create()
         {
+            TestTrade = new TradeInfo(this,EMarketPositionSide.Short);
+            TradeInfoArr = new TradeInfo[10];
+            for (int i = 0; i < TradeInfoArr.Length; i++)
+                TradeInfoArr[i] = new TradeInfo(this, EMarketPositionSide.Long, string.Concat("Trade ", i));
+
             PricePattern = new PricePatternStrategy(this);
 
             // Trade Info Class
@@ -133,6 +141,15 @@ namespace PowerLanguage.Strategy
         const int EnoughData = 1200;
         protected override void StartCalc()
         {
+            //Output.WriteLine("current trade: " + TestTrade.IsEntryOrderFilled);
+            //TradeInfoArr[5].IsEntryOrderFilled = true;
+            //TradeInfoArr[3].IsEntryOrderFilled = true;
+            //bool ret = TestTrade.OCO(TradeInfoArr);
+            //Output.WriteLine("OCO test: " + ret);
+            //Output.WriteLine("TradeInfo Name: " + TradeInfoArr[0].EntryName);
+            //Output.WriteLine("current trade: " + TestTrade.IsEntryOrderFilled);
+
+
             PricePattern._Length = 6;
             PricePattern._Smooth = 10;
             OnePip = (Bars.Info.BigPointValue / Bars.Info.PriceScale) * 10;
@@ -174,8 +191,8 @@ namespace PowerLanguage.Strategy
             if (Bars.CurrentBar > EnoughData)
             {
                 //SendStpEntry();
-                //SendMktEntry();
-                SendStpLmtEntry();
+                SendMktEntry();
+                //SendStpLmtEntry();
                 //SendStpStpEntry();
                 //SendLmtEntry();
                 //TestFramework1();
@@ -2987,7 +3004,7 @@ namespace PowerLanguage.Function
         public double EntryPrice { get; set; }
         public double LimitPrice { get; private set; }
         public double StopPrice { get; private set; }
-        public bool IsEntryOrderFilled { get; private set; }
+        public bool IsEntryOrderFilled { get; set; } // private set
         public bool SendEntry { get; private set; }
         public int TimeInForce { get; private set; }
         public int Contracts { get; set; }
@@ -3033,6 +3050,7 @@ namespace PowerLanguage.Function
         #region Value Fields
         // fields - value types
         int TxtDisplace, CurrMarketPosition;
+        int CurrTick, PrevTick, EntryTick;
         double OnePip;
         int MarketPositionPrev, MarketPositionChg;
         bool PrintEntryTxtOnce, PrintStopLossTxtOnce;
@@ -3042,6 +3060,9 @@ namespace PowerLanguage.Function
 
         protected override void StartCalc()
         {
+            // reset tick counter
+            CurrTick = PrevTick = 0;
+
             // one pip = 10 ticks
             OnePip = (Bars.Info.BigPointValue / Bars.Info.PriceScale) * 10;
 
@@ -3103,11 +3124,18 @@ namespace PowerLanguage.Function
 
             // reset market position information
             MarketPositionChg = MarketPositionPrev = 0;
+
+            // reset entry tick
+            EntryTick = 0;
         }
         #endregion
 
         protected override int CalcBar()
         {
+            // only IOG mode then count ticks, otherwise use Bars.CurrentBar
+            if (Environment.IOGEnabled) CurrTick++;
+            else CurrTick = Bars.CurrentBar;
+
             // CStudyControl is passed to the base class which this class inherits
             CurrMarketPosition = StrategyInfo.MarketPosition;
 
@@ -3134,6 +3162,8 @@ namespace PowerLanguage.Function
 
             //Debug(27926, 2, "LE_1");
 
+            // this has to be at the very end
+            PrevTick = CurrTick;
             return CurrMarketPosition;
         }
 
@@ -3215,6 +3245,47 @@ namespace PowerLanguage.Function
 
             return false;
         }
+        public bool OCO(params TradeInfo[] others)
+        {
+            // this current order filled. Cancel all others
+            if (IsEntryOrderFilled)
+            {
+                foreach (TradeInfo trade in others)
+                    trade.CancelOrder();
+
+                return true;
+            }
+            else
+            {
+                // if one trade order filled in others, cancel all others.
+                TradeInfo temp;
+
+                // move the order that is filled to [0]
+                for (int i = 0; i < others.Length; i++)
+                {
+                    if (others[i].IsEntryOrderFilled)
+                    {
+                        temp = others[i];
+                        others[i] = others[0];
+                        others[0] = temp;
+                        break;
+                    }
+                }
+
+                // if [0] is filled, cancel all other orders including this.
+                if (others[0].IsEntryOrderFilled)
+                {
+                    for (int i = 1; i < others.Length; i++)
+                        others[i].CancelOrder();
+
+                    // including this.
+                    this.CancelOrder();
+                    return true;
+                }
+            }
+
+            return false;
+        }
         private void LongEntry()
         {
             // entry order has not been filled
@@ -3227,9 +3298,13 @@ namespace PowerLanguage.Function
                 // limit order entry is true, and 
                 if (LimitPrice > 0 && StopPrice <= 0)
                 {
+                    double entryPrice = Bars.Low[0];
+                    if (Environment.IOGEnabled) entryPrice = Bars.Close[0];
+
                     // limit order filled
-                    if (Bars.Low[0] <= EntryPrice && MarketPositionChg == Contracts)
+                    if (entryPrice <= EntryPrice && MarketPositionChg == Contracts)
                     {
+                        EntryTick = CurrTick;
                         IsEntryOrderFilled = true;
                         CancelEntryOrder();
                         return;
@@ -3260,9 +3335,13 @@ namespace PowerLanguage.Function
                 // stop order entry is true
                 if (StopPrice > 0 && LimitPrice <= 0)
                 {
+                    double entryPrice = Bars.High[0];
+                    if (Environment.IOGEnabled) entryPrice = Bars.Close[0];
+
                     // stop order filled
-                    if (Bars.High[0] >= EntryPrice && MarketPositionChg == Contracts)
+                    if (entryPrice >= EntryPrice && MarketPositionChg == Contracts)
                     {
+                        EntryTick = CurrTick;
                         IsEntryOrderFilled = true;
                         CancelEntryOrder();
                         return;
@@ -3298,6 +3377,7 @@ namespace PowerLanguage.Function
                     // change in mkt position positive
                     if (MarketPositionChg == Contracts)
                     {
+                        EntryTick = CurrTick;
                         IsEntryOrderFilled = true;
                         CancelEntryOrder();
                         return;
@@ -3320,6 +3400,7 @@ namespace PowerLanguage.Function
                     // short limit order filled, check mkt position if it is filled
                     if (Bars.High[0] >= EntryPrice && MarketPositionChg == -Contracts)
                     {
+                        EntryTick = CurrTick;
                         IsEntryOrderFilled = true;
                         CancelEntryOrder();
                         return;
@@ -3353,6 +3434,7 @@ namespace PowerLanguage.Function
                     // short limit order filled
                     if (Bars.Low[0] <= EntryPrice && MarketPositionChg == -Contracts)
                     {
+                        EntryTick = CurrTick;
                         IsEntryOrderFilled = true;
                         CancelEntryOrder();
                         return;
@@ -3388,6 +3470,7 @@ namespace PowerLanguage.Function
                     // market order filled
                     if (MarketPositionChg == -Contracts)
                     {
+                        EntryTick = CurrTick;
                         IsEntryOrderFilled = true;
                         CancelEntryOrder();
                         return;
@@ -3399,7 +3482,7 @@ namespace PowerLanguage.Function
         #endregion
 
         #region Exit Order Logic
-        private void LongExit()
+        private void LongExit2()
         {
             // version 2.0
             // use market position to determine state of trade
@@ -3408,13 +3491,19 @@ namespace PowerLanguage.Function
             bool closingTick = Bars.Status == EBarState.Close;
             bool optimization = Environment.Optimizing;
 
+            // end of bar use bar.high for profit target
             double profitPrice = Bars.High[0];
-
             if (Environment.IOGEnabled)
                 profitPrice = Bars.Close[0];
 
+            bool isNotEntryTick = CurrTick != EntryTick;
+            if (Environment.IOGEnabled == false) isNotEntryTick = true;
+
+            // and not on entry tick
             if (IsEntryOrderFilled)
             {
+                bool mpChange = MarketPositionChg < 0;
+
                 // profit 1 in used
                 if (ProfitPrice1 > 0)
                 {
@@ -3423,7 +3512,10 @@ namespace PowerLanguage.Function
                     if (DisplayProfits && closingTick && optimization == false)
                         DisplayPriceLevels(ProfitPrice1, Color.Cyan, "P1", ref PrintProfit1TxtOnce);
 
-                    if (Math.Abs(MarketPositionChg) >= ProfitQty1 && profitPrice >= ProfitPrice1)
+                    if (Math.Abs(MarketPositionChg) >= ProfitQty1 
+                        && profitPrice >= ProfitPrice1 
+                        && mpChange 
+                        && isNotEntryTick)
                     {
                         Contracts -= ProfitQty1;
 
@@ -3452,7 +3544,10 @@ namespace PowerLanguage.Function
                     if (DisplayProfits && closingTick && optimization == false)
                         DisplayPriceLevels(ProfitPrice2, Color.Cyan, "P2", ref PrintProfit2TxtOnce);
 
-                    if (Math.Abs(MarketPositionChg) >= ProfitQty2 && profitPrice >= ProfitPrice2)
+                    if (Math.Abs(MarketPositionChg) >= ProfitQty2 
+                        && profitPrice >= ProfitPrice2 
+                        && mpChange
+                        && isNotEntryTick)
                     {
                         Contracts -= ProfitQty2;
 
@@ -3482,7 +3577,10 @@ namespace PowerLanguage.Function
                         DisplayPriceLevels(ProfitPrice3, Color.Cyan, "P3", ref PrintProfit3TxtOnce);
 
                     // profit 3 hit
-                    if (Math.Abs(MarketPositionChg) >= ProfitQty3 && profitPrice >= ProfitPrice3)
+                    if (Math.Abs(MarketPositionChg) >= ProfitQty3 
+                        && profitPrice >= ProfitPrice3 
+                        && mpChange
+                        && isNotEntryTick)
                     {
                         Contracts -= ProfitQty3;
 
@@ -3514,17 +3612,13 @@ namespace PowerLanguage.Function
                         DisplayPriceLevels(StopLossPrice, Color.Yellow, "SL", ref PrintStopLossTxtOnce);
 
                     double stopPrice = Bars.Low[0];
-                    if (Environment.IOGEnabled)
-                        stopPrice = Bars.Close[0];
-
-                    bool stopHit = Bars.Close[0] <= StopLossPrice;
-
-                    int maxBars = ExecInfo.MaxBarsBack;
-                    if (Bars.CurrentBar == 24903 - maxBars || Bars.CurrentBar == 24904 - maxBars)
-                        Debug();
+                    if (Environment.IOGEnabled) stopPrice = Bars.Close[0];
 
                     // stop loss hit
-                    if (Math.Abs(MarketPositionChg) >= Contracts && stopHit)
+                    if (Math.Abs(MarketPositionChg) >= Contracts 
+                        && stopPrice <= StopLossPrice
+                        && mpChange
+                        && isNotEntryTick)
                     {
                         CancelExitOrder();
                         return;
@@ -3532,6 +3626,139 @@ namespace PowerLanguage.Function
                 }
             }
         }
+        private void LongExit()
+        {
+            // version 2.0
+            // use market position to determine state of trade
+
+            // local variables
+            bool closingTick = Bars.Status == EBarState.Close;
+            bool optimization = Environment.Optimizing;
+
+            // end of bar use bar.high for profit target
+            double profitPrice = Bars.High[0];
+            if (Environment.IOGEnabled)
+                profitPrice = Bars.Close[0];
+
+            bool isNotEntryTick = CurrTick != EntryTick;
+            if (Environment.IOGEnabled == false) isNotEntryTick = true;
+
+            // and not on entry tick
+            if (IsEntryOrderFilled && isNotEntryTick)
+            {
+                bool mpChange = MarketPositionChg < 0;
+
+                // profit 1 in used
+                if (ProfitPrice1 > 0)
+                {
+                    SendProfit1 = true;
+
+                    if (DisplayProfits && closingTick && optimization == false)
+                        DisplayPriceLevels(ProfitPrice1, Color.Cyan, "P1", ref PrintProfit1TxtOnce);
+
+                    if (Math.Abs(MarketPositionChg) >= ProfitQty1 && profitPrice >= ProfitPrice1 && mpChange)
+                    {
+                        Contracts -= ProfitQty1;
+
+                        // reset profit prices
+                        ProfitPrice1 = ProfitQty1 = 0;
+
+                        // reset stop and profits flags which triggers Send()
+                        SendProfit1 = false;
+
+                        // reset txt flags that plot exit txt
+                        PrintProfit1TxtOnce = false;
+
+                        if (Contracts == 0)
+                        {
+                            CancelExitOrder();
+                            return;
+                        }
+                    }
+                }
+
+                // profit 2 in used
+                if (ProfitPrice2 > 0)
+                {
+                    SendProfit2 = true;
+
+                    if (DisplayProfits && closingTick && optimization == false)
+                        DisplayPriceLevels(ProfitPrice2, Color.Cyan, "P2", ref PrintProfit2TxtOnce);
+
+                    if (Math.Abs(MarketPositionChg) >= ProfitQty2 && profitPrice >= ProfitPrice2 && mpChange)
+                    {
+                        Contracts -= ProfitQty2;
+
+                        // reset profit prices
+                        ProfitPrice2 = ProfitQty2 = 0;
+
+                        // reset stop and profits flags which triggers Send()
+                        SendProfit2 = false;
+
+                        // reset txt flags that plot exit txt
+                        PrintProfit2TxtOnce = false;
+
+                        if (Contracts == 0)
+                        {
+                            CancelExitOrder();
+                            return;
+                        }
+                    }
+                }
+
+                // profit 3 in used
+                if (ProfitPrice3 > 0)
+                {
+                    SendProfit3 = true;
+
+                    if (DisplayProfits && closingTick && optimization == false)
+                        DisplayPriceLevels(ProfitPrice3, Color.Cyan, "P3", ref PrintProfit3TxtOnce);
+
+                    // profit 3 hit
+                    if (Math.Abs(MarketPositionChg) >= ProfitQty3 && profitPrice >= ProfitPrice3 && mpChange)
+                    {
+                        Contracts -= ProfitQty3;
+
+                        // reset profit prices
+                        ProfitPrice3 = ProfitQty3 = 0;
+
+                        // reset stop and profits flags which triggers Send()
+                        SendProfit3 = false;
+
+                        // reset txt flags that plot exit txt
+                        PrintProfit3TxtOnce = false;
+
+                        if (Contracts == 0)
+                        {
+                            CancelExitOrder();
+                            return;
+                        }
+                    }
+                }
+
+                // stop loss in used
+                if (StopLossPrice > 0)
+                {
+                    // send stop loss on next tick or bar
+                    SendStopLoss = true;
+
+                    // print stop loss
+                    if (DisplayStopLoss && closingTick && optimization == false)
+                        DisplayPriceLevels(StopLossPrice, Color.Yellow, "SL", ref PrintStopLossTxtOnce);
+
+                    double stopPrice = Bars.Low[0];
+                    if (Environment.IOGEnabled) stopPrice = Bars.Close[0];
+
+                    // stop loss hit
+                    if (Math.Abs(MarketPositionChg) >= Contracts && stopPrice <= StopLossPrice && mpChange)
+                    {
+                        CancelExitOrder();
+                        return;
+                    }
+                }
+            }
+        }
+
         private void ShortExit()
         {
             // version 2.0
@@ -3541,7 +3768,13 @@ namespace PowerLanguage.Function
             bool closingTick = Bars.Status == EBarState.Close;
             bool optimization = Environment.Optimizing;
 
-            if (IsEntryOrderFilled)
+            double profitPrice = Bars.Low[0];
+            if (Environment.IOGEnabled) profitPrice = Bars.Close[0];
+
+            bool isNotEntryTick = CurrTick != EntryTick;
+            if (Environment.IOGEnabled == false) isNotEntryTick = true;
+
+            if (IsEntryOrderFilled && isNotEntryTick)
             {
                 // profit 1 in used
                 if (ProfitPrice1 > 0)
@@ -3552,7 +3785,7 @@ namespace PowerLanguage.Function
                         DisplayPriceLevels(ProfitPrice1, Color.Cyan, "P1", ref PrintProfit1TxtOnce);
 
                     // Mp change will be position for short exit
-                    if (MarketPositionChg >= ProfitQty1 && Bars.Low[0] <= ProfitPrice1)
+                    if (MarketPositionChg >= ProfitQty1 && profitPrice <= ProfitPrice1)
                     {
                         Contracts -= ProfitQty1;
 
@@ -3586,7 +3819,7 @@ namespace PowerLanguage.Function
                         //Debug();
                     }
 
-                    if (MarketPositionChg >= ProfitQty2 && Bars.Low[0] <= ProfitPrice2)
+                    if (MarketPositionChg >= ProfitQty2 && profitPrice <= ProfitPrice2)
                     {
                         Contracts -= ProfitQty2;
 
@@ -3616,7 +3849,7 @@ namespace PowerLanguage.Function
                     if (DisplayProfits && closingTick && optimization == false)
                         DisplayPriceLevels(ProfitPrice3, Color.Cyan, "P3", ref PrintProfit3TxtOnce);
 
-                    if (MarketPositionChg >= ProfitQty3 && Bars.Low[0] <= ProfitPrice3)
+                    if (MarketPositionChg >= ProfitQty3 && profitPrice <= ProfitPrice3)
                     {
                         Contracts -= ProfitQty3;
 
@@ -3647,143 +3880,15 @@ namespace PowerLanguage.Function
                     if (DisplayStopLoss && closingTick && optimization == false)
                         DisplayPriceLevels(StopLossPrice, Color.Yellow, "SL", ref PrintStopLossTxtOnce);
 
+                    double stopPrice = Bars.High[0];
+                    if (Environment.IOGEnabled) stopPrice = Bars.Close[0];
+
                     // stop loss hit
-                    if (Bars.High[0] >= StopLossPrice && MarketPositionChg >= Contracts)
+                    if (stopPrice >= StopLossPrice && MarketPositionChg >= Contracts)
                     {
                         CancelExitOrder();
                         return;
                     }
-                }
-            }
-        }
-        private void ShortExit2()
-        {
-            // version 2.0
-            // use market position to determine state of trade
-
-            // local variables
-            int mp = CurrMarketPosition;
-            bool closingTick = Bars.Status == EBarState.Close;
-            bool optimization = Environment.Optimizing;
-            double profitPrice;
-
-            // use current tick price for intra bar order generation
-            if (Environment.IOGEnabled)
-                profitPrice = Bars.Close[0];
-            else
-                profitPrice = Bars.Low[0];
-
-            if (IsEntryOrderFilled)
-            {
-                // stop loss in used
-                if (StopLossPrice > 0)
-                {
-                    // conditions to send stop loss
-                    if (mp < 0)
-                    {
-                        // send stop loss on next tick or bar
-                        SendStopLoss = true;
-
-                        // print stop loss
-                        if (DisplayStopLoss && closingTick && optimization == false)
-                            DisplayPriceLevels(StopLossPrice, Color.Yellow, "SL", ref PrintStopLossTxtOnce);
-                    }
-
-                    // stop loss hit
-                    else
-                    {
-                        CancelExitOrder();
-                        return;
-                    }
-                }
-
-                // profit 1 in used
-                if (ProfitPrice1 > 0)
-                {
-                    if (profitPrice > ProfitPrice1)
-                    {
-                        SendProfit1 = true;
-
-                        if (DisplayProfits && closingTick && optimization == false)
-                            DisplayPriceLevels(ProfitPrice1, Color.Cyan, "P1", ref PrintProfit1TxtOnce);
-                    }
-
-                    else if (ProfitQty1 == Math.Abs(Contracts + mp))
-                    {
-                        // reset profit prices
-                        ProfitPrice1 = ProfitQty1 = 0;
-
-                        // reset stop and profits flags which triggers Send()
-                        SendProfit1 = false;
-
-                        // reset txt flags that plot exit txt
-                        PrintProfit1TxtOnce = false;
-
-                        Contracts = Math.Abs(mp);
-                    }
-                }
-
-                // profit 2 in used
-                if (ProfitPrice2 > 0)
-                {
-                    if (profitPrice > ProfitPrice2)
-                    {
-                        SendProfit2 = true;
-
-                        if (DisplayProfits && closingTick && optimization == false)
-                            DisplayPriceLevels(ProfitPrice2, Color.Cyan, "P2", ref PrintProfit2TxtOnce);
-                    }
-
-                    else if (ProfitQty2 == Math.Abs(Contracts + mp))
-                    {
-                        // reset profit prices
-                        ProfitPrice2 = ProfitQty2 = 0;
-
-                        // reset stop and profits flags which triggers Send()
-                        SendProfit2 = false;
-
-                        // reset txt flags that plot exit txt
-                        PrintProfit2TxtOnce = false;
-
-                        Contracts = Math.Abs(mp);
-                    }
-                }
-
-                // profit 3 in used
-                if (ProfitPrice3 > 0)
-                {
-                    // profit 3 hit
-                    if (profitPrice > ProfitPrice3)
-                    {
-                        SendProfit3 = true;
-
-                        if (DisplayProfits && closingTick && optimization == false)
-                            DisplayPriceLevels(ProfitPrice3, Color.Cyan, "P3", ref PrintProfit3TxtOnce);
-                    }
-
-                    else if (ProfitQty3 == Math.Abs(Contracts + mp))
-                    {
-                        // reset profit prices
-                        ProfitPrice3 = ProfitQty3 = 0;
-
-                        // reset stop and profits flags which triggers Send()
-                        SendProfit3 = false;
-
-                        // reset txt flags that plot exit txt
-                        PrintProfit3TxtOnce = false;
-
-                        Contracts = Math.Abs(mp);
-                    }
-                }
-
-                // all profits targets hit
-                if (mp == 0
-                    && SendProfit1 == false
-                    && SendProfit2 == false
-                    && SendProfit3 == false)
-                {
-                    CancelExitOrder();
-                    return;
                 }
             }
         }
@@ -4050,12 +4155,16 @@ namespace PowerLanguage.Function
         public void Debug()
         {
             // print out the current state
+            Print("-------------------------- Start --------------------------");
 
             // entry info
+            Print("Chart Bar Number: " + (Bars.CurrentBar + ExecInfo.MaxBarsBack));
+            Print("Current Tick: " + CurrTick);
             Print("Class Name: " + EntryName);
             Print("Bar Status: " + Bars.Status);
             Print("Time in Force: " + TimeInForce);
             Print("Entry Order Filled: " + IsEntryOrderFilled);
+            Print("Entry Tick ID: " + EntryTick);
             Print("Send Entry Order: " + SendEntry);
             Print("Entry Price: " + EntryPrice);
             Print("Stop Price: " + StopPrice);
@@ -4088,6 +4197,7 @@ namespace PowerLanguage.Function
             Print("Low: " + Bars.Low[0]);
             Print("Open: " + Bars.Open[0]);
             Print("Close: " + Bars.Close[0]);
+            Print("--------------------------- End ---------------------------");
             Output.WriteLine("");
             Output.WriteLine("");
         }
@@ -4130,7 +4240,6 @@ namespace PowerLanguage.Function
                 Bars.TimeValue.ToString("dd-MM-yy HH:mm:ss tt"),
                 message);
         }
-
         private void Print(string message, int chartbarNum)
         {
             int maxbars = ExecInfo.MaxBarsBack;
