@@ -2920,16 +2920,17 @@ namespace PowerLanguage.Strategy
 
 namespace PowerLanguage.Function
 {
-    #region Function - Trade Info v61
+    #region Function - Trade Info v62
     public sealed class TradeInfo : FunctionSimple<int>
     {
         #region Documentations
         //=========================================================================================
         // Project Name : TradeInfo
         // Description  : Understanding Strategy Orders. IOG and non-IOG
+        // Objectives   : 
         // Type         : Function
-        // Version      : v6.1
-        // Date         : 24 - Aug - 2020
+        // Version      : v6.2
+        // Date         : 28 - Aug - 2020
         // Time Taken   : 
         // Remarks      : TradeInfo Framework
         //=========================================================================================
@@ -2940,15 +2941,17 @@ namespace PowerLanguage.Function
         //=========================================================================================
 
         /*/
-         *--------------------------------------- Objectives --------------------------------------
-         *  6.1.0 - Run variable series test
-         *  6.1.1 - Fix long short entries / exits 
-         *--------------------------------------- Objectives --------------------------------------
+         *----------------------------------- Version Objectives ----------------------------------
+         *  6.2.0 - Quant Development Process Implementation
+         * ---------------------------------- Version Objectives ----------------------------------
         /*/
 
         #region Version History
         /*/
-         *---------------------------------------- Versions ---------------------------------------
+         *------------------------------------ Versions History -----------------------------------
+         *  6.1.0 - Run variable series test
+         *  6.1.1 - Fix long short entries / exits 
+         *  
          *  6.0.0 - Base Version
          * 
          *  5.0.1 - Tracking the changes in MarketPosition
@@ -2982,14 +2985,38 @@ namespace PowerLanguage.Function
          *  3.1.4 add short stop order entry - Successful
          *  3.1.5 add stop entry and stop limit entry - will not work
          *  3.1.6 add double stop entry - will not work
-         *---------------------------------------- Versions ---------------------------------------
+         *------------------------------------ Versions History -----------------------------------
         /*/
 
         /*/
          *------------------------------------------ Notes ----------------------------------------
-         *  1. VariableSeries are called and updated only on CLOSING tick
-         *  2. Use VariableSeries only when you need to access previous CLOSING tick values
-         *  3. FunctionSeries<T> is by default called only on CLOSING tick implicitly
+         *  Quant Development Process
+         *  
+         *  1. Requirement Analysis 
+         *      Goals and objectives
+         *      Viability of concept
+         *      Scope of work
+         *      
+         *  2. Design
+         *      Resources and data required
+         *      Class components architecture
+         *      Workflow and timeline
+         *      
+         *  3. Develop
+         *      Track progress
+         *      Source control
+         *      Develop, test and debug iteratively
+         *      
+         *  4. Optimization
+         *      Check to see objectives are met
+         *      Optimize code for efficiency
+         *      Create final version
+         *      
+         *  5. Maintain 
+         *      Test extensively
+         *      Upgrade existing features
+         *      Add new features
+         *      
          *------------------------------------------ Notes ----------------------------------------
         /*/
         #endregion
@@ -3047,7 +3074,7 @@ namespace PowerLanguage.Function
         }
         #endregion
 
-        #region Value Fields
+        #region Class State
         // fields - value types
         int TxtDisplace, CurrMarketPosition;
         int CurrTick, PrevTick, EntryTick;
@@ -3058,8 +3085,60 @@ namespace PowerLanguage.Function
         bool EntryPriceLock, StopLossPriceLock, ProfitPrice1Lock, ProfitPrice2Lock, ProfitPrice3Lock;
         DateTime CurrentTime;
 
+        private void ClassState()
+        {
+            // print out the current state
+            Print("-------------------------- Start --------------------------");
+
+            // entry info
+            Print("Chart Bar Number: " + (Bars.CurrentBar + ExecInfo.MaxBarsBack));
+            Print("Current Tick: " + CurrTick);
+            Print("Class Name: " + EntryName);
+            Print("Bar Status: " + Bars.Status);
+            Print("Time in Force: " + TimeInForce);
+            Print("Entry Order Filled: " + IsEntryOrderFilled);
+            Print("Entry Tick ID: " + EntryTick);
+            Print("Send Entry Order: " + SendEntry);
+            Print("Entry Price: " + EntryPrice);
+            Print("Stop Price: " + StopPrice);
+            Print("Limit Price: " + LimitPrice);
+            Output.WriteLine("");
+
+            // exit info
+            Print("Send Stop Loss: " + SendStopLoss);
+            Print("Stop Loss Price: " + StopLossPrice);
+            Print("Send Profit 1: " + SendProfit1);
+            Print("Profit Price 1: " + ProfitPrice1);
+            Print("Profit Qty 1: " + ProfitQty1);
+            Print("Send Profit 2: " + SendProfit2);
+            Print("Profit Price 2: " + ProfitPrice2);
+            Print("Profit Qty 2: " + ProfitQty2);
+            Print("Send Profit 3: " + SendProfit3);
+            Print("Profit Price 3: " + ProfitPrice3);
+            Print("Profit Qty 3: " + ProfitQty3);
+            Output.WriteLine("");
+
+            // postion info
+            Print("Contracts: " + Contracts);
+            Print("Market Position: " + CurrMarketPosition);
+            Print("Change in MP: " + MarketPositionChg);
+            Print("IOG Enabled: " + Environment.IOGEnabled);
+            Output.WriteLine("");
+
+            // bar info
+            Print("High: " + Bars.High[0]);
+            Print("Low: " + Bars.Low[0]);
+            Print("Open: " + Bars.Open[0]);
+            Print("Close: " + Bars.Close[0]);
+            Print("--------------------------- End ---------------------------");
+            Output.WriteLine("");
+            Output.WriteLine("");
+        }
+
         protected override void StartCalc()
         {
+            // initialize class state when strategy restarts
+
             // reset tick counter
             CurrTick = PrevTick = 0;
 
@@ -3073,12 +3152,9 @@ namespace PowerLanguage.Function
             CancelOrder();
         }
 
-        #endregion
-
-        #region Cancel Methods
         private void CancelOrder()
         {
-            // position reset method below fields for easier reference
+            // reset order state
             CancelEntryOrder();
             CancelExitOrder();
         }
@@ -3128,8 +3204,10 @@ namespace PowerLanguage.Function
             // reset entry tick
             EntryTick = 0;
         }
+
         #endregion
 
+        #region Main Function
         protected override int CalcBar()
         {
             // only IOG mode then count ticks, otherwise use Bars.CurrentBar
@@ -3166,6 +3244,8 @@ namespace PowerLanguage.Function
             PrevTick = CurrTick;
             return CurrMarketPosition;
         }
+
+        #endregion
 
         #region Track Market Position
         private void LongMarketPosition()
