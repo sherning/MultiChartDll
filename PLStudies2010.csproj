@@ -346,6 +346,7 @@
     <Compile Include="__SherNing_PricePatterns.Strategy.CS" />
     <Compile Include="__SherNing_TradeInfoMulti.Strategy.CS" />
     <Compile Include="___SherNing_StrategyFramework.Strategy.CS" />
+    <Compile Include="__SherNing_StrategyOrderTypes.Strategy.CS" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

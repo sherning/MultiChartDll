@@ -201,14 +201,61 @@ namespace PowerLanguage.Strategy
                 //SendStpEntry();
                 //SendMktEntry();
                 //SendStpLmtEntry();
-                //SendStpStpEntry();
+                SendStpStpEntry();
                 //SendLmtEntry();
-                TestFramework1();
+                //TestFramework1();
+                //TestFramework2();
                 SendExitOrders();
             }
         }
 
         #region Test Framework
+        private void TestFrameWork3()
+        {
+
+        }
+        private void TestFramework2()
+        {
+            // long entry condition are valid
+            if (Bars.CurrentBar % 101 == 0
+                && LeEntry1.IsEntryOrderFilled == false
+                && Bars.Status == EBarState.Close)
+            {
+                double close = Bars.Close[0];
+                double stop = close - (15 * OnePip);
+
+                // set stop loss, separate from entry order, sendentryorder() for entry info
+                LeEntry1.SetMarketOrder(close, 100000);
+                LeEntry1.SetStopLoss(stop - OnePip, false);
+                LeEntry1.SetProfitTarget(1, 30000, 1);
+                LeEntry1.SetProfitTarget(2, 40000, 1.5);
+                LeEntry1.SetProfitTarget(3, 30000, 2);
+            }
+
+            LeEntry1.Call();
+
+            if (LeEntry1.SendEntry)
+                LeMkt.Send(LeEntry1.Contracts);
+
+            if (Bars.CurrentBar % 151 == 0
+                && LeEntry2.IsEntryOrderFilled == false
+                && Bars.Status == EBarState.Close)
+            {
+                double close = Bars.Close[0];
+                double stop = close + (15 * OnePip);
+
+                LeEntry2.SetMarketOrder(close, 100000);
+                LeEntry2.SetStopLoss(stop - OnePip, false);
+                LeEntry2.SetProfitTarget(1, 30000, 1);
+                LeEntry2.SetProfitTarget(2, 40000, 1.5);
+                LeEntry2.SetProfitTarget(3, 30000, 2);
+            }
+
+            LeEntry2.Call();
+
+            if (LeEntry2.SendEntry)
+                LeMkt.Send(LeEntry2.Contracts);
+        }
         private void TestFramework1()
         {
             // long entry condition are valid
@@ -251,6 +298,7 @@ namespace PowerLanguage.Strategy
             if (SeEntry1.SendEntry)
                 SeMkt.Send(SeEntry1.Contracts);
         }
+
         #endregion
 
         #region Send Order Command
@@ -2931,7 +2979,7 @@ namespace PowerLanguage.Function
         #region Documentations
         //=========================================================================================
         // Project Name : TradeInfo
-        // Description  : Understanding Strategy Orders. IOG and non-IOG
+        // Description  : TradeInfo tracker
         // Objectives   : 
         // Type         : Function
         // Version      : v6.3
@@ -3061,6 +3109,7 @@ namespace PowerLanguage.Function
         bool PrintProfit1TxtOnce, PrintProfit2TxtOnce, PrintProfit3TxtOnce;
         bool EntryPriceLock, StopLossPriceLock, ProfitPrice1Lock, ProfitPrice2Lock, ProfitPrice3Lock;
         bool CancelStopLoss, CancelProfit1, CancelProfit2, CancelProfit3;
+        bool LockNewPrices, LockNewPositions;
         DateTime CurrentTime;
 
         private void ClassState()
@@ -3191,6 +3240,9 @@ namespace PowerLanguage.Function
 
             // reset cancel flags
             CancelStopLoss = CancelProfit1 = CancelProfit2 = CancelProfit3 = false;
+
+            // reset new price and new position
+            LockNewPrices = LockNewPositions = false;
         }
 
         #endregion
@@ -3210,13 +3262,13 @@ namespace PowerLanguage.Function
             {
                 case EMarketPositionSide.Long:
                     LongMarketPosition();
-                    LongEntry();
+                    SendLe();
                     SendLx();
                     break;
 
                 case EMarketPositionSide.Short:
                     ShortMarketPosition();
-                    ShortEntry();
+                    SendSe();
                     SendSx();
                     break;
 
@@ -3354,7 +3406,7 @@ namespace PowerLanguage.Function
 
             return false;
         }
-        private void LongEntry()
+        private void SendLe()
         {
             // entry order has not been filled
             if (IsEntryOrderFilled == false)
@@ -3453,7 +3505,7 @@ namespace PowerLanguage.Function
                 }
             }
         }
-        private void ShortEntry()
+        private void SendSe()
         {
             // entry order has not been filled
             if (IsEntryOrderFilled == false)
@@ -3957,6 +4009,46 @@ namespace PowerLanguage.Function
             EntryPrice = entry;
             Contracts = contracts;
             IsEntryOrderFilled = false;
+        }
+        public void UpdateCurrentPositions
+            (int contracts, int profit1, int profit2, int profit3, bool lock_)
+        {
+            if (IsEntryOrderFilled && LockNewPositions == false)
+            {
+                if (Contracts > 0)
+                    Contracts += contracts;
+
+                if (ProfitQty1 > 0 && profit1 > 0)
+                    ProfitQty1 += profit1;
+
+                if (ProfitQty2 > 0 && profit2 > 0)
+                    ProfitQty2 += profit2;
+
+                if (ProfitQty3 > 0 && profit3 > 0)
+                    ProfitQty3 += profit3;
+
+                if (lock_) LockNewPositions = true;
+            }
+        }
+        public void UpdateCurrentPriceLevels
+            (double stoploss, double profit1, double profit2, double profit3, bool lock_)
+        {
+            if (IsEntryOrderFilled && LockNewPrices == false)
+            {
+                if (StopLossPrice > 0 && stoploss > 0)
+                    StopLossPrice = stoploss;
+
+                if (ProfitPrice1 > 0 && profit1 > 0)
+                    ProfitPrice1 = profit1;
+
+                if (ProfitPrice2 > 0 && profit2 > 0)
+                    ProfitPrice2 = profit2;
+
+                if (ProfitPrice3 > 0 && profit3 > 0)
+                    ProfitPrice3 = profit3;
+
+                if (lock_) LockNewPrices = true;
+            }
         }
         public void SetStopLoss(double stoploss, bool lockPrice)
         {

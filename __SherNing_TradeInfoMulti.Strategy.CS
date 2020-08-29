@@ -70,16 +70,16 @@ namespace PowerLanguage.Strategy
                Contracts.UserSpecified, "Le2", EOrderAction.Buy));
 
             Lxstp1 = OrderCreator.Stop(new SOrderParameters(
-                Contracts.Default, "Lesl1", EOrderAction.Sell));
+                Contracts.UserSpecified, "Lesl1", EOrderAction.Sell));
 
             Lxstp2 = OrderCreator.Stop(new SOrderParameters(
-             Contracts.Default, "Lesl2", EOrderAction.Sell, OrderExit.FromEntry(Lemkt2)));
+             Contracts.UserSpecified, "Lesl2", EOrderAction.Sell, OrderExit.FromEntry(Lemkt2)));
 
             Lxpft11 = OrderCreator.Limit(new SOrderParameters(
-                Contracts.UserSpecified, "Lx11", EOrderAction.Sell));
+                Contracts.UserSpecified, "Lx11", EOrderAction.Sell, OrderExit.FromAll));
 
             Lxpft12 = OrderCreator.Limit(new SOrderParameters(
-               Contracts.UserSpecified, "Lx12", EOrderAction.Sell));
+               Contracts.UserSpecified, "Lx12", EOrderAction.Sell, OrderExit.FromAll));
 
             Lxpft13 = OrderCreator.Limit(new SOrderParameters(
                Contracts.UserSpecified, "Lx13", EOrderAction.Sell, OrderExit.FromEntryTotal(Lemkt1)));
@@ -116,7 +116,7 @@ namespace PowerLanguage.Strategy
             // ensure enought data
             if (Bars.CurrentBar > EnoughData)
             {
-                Test1();
+                Test2();
             }
         }
 
@@ -129,6 +129,42 @@ namespace PowerLanguage.Strategy
         #endregion
 
         #region Tests
+        private void Test2()
+        {
+            // two entry each with own exit
+            int currentTime = Bars.Time[0].Hour * 100 + Bars.Time[0].Minute;
+            double close = Bars.Close[0];
+
+            // entry 1
+            if (currentTime == 2000
+                && Bars.Status == EBarState.Close
+                && LongTrade1.IsEntryOrderFilled == false)
+            {
+                LongTrade1.SetMarketOrder(close, 100000);
+                LongTrade1.SetStopLoss(close - (10 * OnePip), true);
+                LongTrade1.SetProfitTarget(1, 50000, 1);
+                LongTrade1.SetProfitTarget(2, 50000, 2);
+            }
+
+            if (currentTime == 2030
+                && Bars.Status == EBarState.Close
+                && LongTrade1.IsEntryOrderFilled)
+            {
+                LongTrade1.UpdateCurrentPositions(100000, 50000, 50000, 0, true);
+                Lemkt1.Send(100000);
+            }
+
+            LongTrade1.Call();
+
+            // first entry
+            if (LongTrade1.SendEntry) Lemkt1.Send(LongTrade1.Contracts);
+
+            // exits
+            if (LongTrade1.SendStopLoss) Lxstp1.Send(LongTrade1.StopLossPrice, LongTrade1.Contracts);
+            if (LongTrade1.SendProfit1) Lxpft11.Send(LongTrade1.ProfitPrice1, LongTrade1.ProfitQty1);
+            if (LongTrade1.SendProfit2) Lxpft12.Send(LongTrade1.ProfitPrice2, LongTrade1.ProfitQty2);
+
+        }
         private void Test1()
         {
             // two entry each with own exit
@@ -146,31 +182,32 @@ namespace PowerLanguage.Strategy
                 LongTrade1.SetProfitTarget(2, 50000, 2);
             }
 
-            //if (currentTime == 2200
-            //    && Bars.Status == EBarState.Close
-            //    && LongTrade2.IsEntryOrderFilled == false)
-            //{
-            //    LongTrade2.SetMarketOrder(close, 100000);
-            //    LongTrade2.SetStopLoss(close - (10 * OnePip), true);
-            //    LongTrade2.SetProfitTarget(1, 50000, 1);
-            //    LongTrade2.SetProfitTarget(2, 50000, 2);
-            //}
+            if (currentTime == 2200
+                && Bars.Status == EBarState.Close
+                && LongTrade2.IsEntryOrderFilled == false)
+            {
+                LongTrade2.SetMarketOrder(close, 120000);
+                LongTrade2.SetStopLoss(close - (10 * OnePip), true);
+                LongTrade2.SetProfitTarget(1, 60000, 1);
+                LongTrade2.SetProfitTarget(2, 60000, 2);
+            }
 
             LongTrade1.Call();
-            //LongTrade2.Call();
+            LongTrade2.Call();
 
             if (LongTrade1.SendEntry) Lemkt1.Send(LongTrade1.Contracts);
-            //if (LongTrade2.SendEntry) Lemkt2.Send(LongTrade2.Contracts);
+            if (LongTrade2.SendEntry) Lemkt2.Send(LongTrade2.Contracts);
 
-            if (LongTrade1.SendStopLoss) Lxstp1.Send(LongTrade1.StopLossPrice);
-            //if (LongTrade2.SendStopLoss) Lxstp2.Send(LongTrade2.StopLossPrice);
+            if (LongTrade1.SendStopLoss) Lxstp1.Send(LongTrade1.StopLossPrice, LongTrade1.Contracts);
+            if (LongTrade2.SendStopLoss) Lxstp2.Send(LongTrade2.StopLossPrice, LongTrade2.Contracts);
 
             if (LongTrade1.SendProfit1) Lxpft11.Send(LongTrade1.ProfitPrice1, LongTrade1.ProfitQty1);
             if (LongTrade1.SendProfit2) Lxpft12.Send(LongTrade1.ProfitPrice2, LongTrade1.ProfitQty2);
 
-            //if (LongTrade2.SendProfit1) Lxpft21.Send(LongTrade2.ProfitPrice1, LongTrade2.ProfitQty1);
-            //if (LongTrade2.SendProfit2) Lxpft22.Send(LongTrade2.ProfitPrice2, LongTrade2.ProfitQty2);
+            if (LongTrade2.SendProfit1) Lxpft21.Send(LongTrade2.ProfitPrice1, LongTrade2.ProfitQty1);
+            if (LongTrade2.SendProfit2) Lxpft22.Send(LongTrade2.ProfitPrice2, LongTrade2.ProfitQty2);
         }
+
         #endregion
 
         #region Strategy Conditions
