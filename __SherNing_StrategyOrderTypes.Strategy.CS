@@ -47,14 +47,267 @@ namespace PowerLanguage.Strategy
         public __SherNing_StrategyOrderTypes(object _ctx) : base(_ctx)
         {
             EntrySelection = 1;
-            ExitSelection = 1;
+            ExitSelection = 3;
         }
         #endregion
 
         #region Program Main - CalcBar()
         protected override void CalcBar()
         {
+            StrategyTest4();
         }
+
+        private void StrategyTest1()
+        {
+            // three different entries with two exits each
+            // IOG.Enabled
+            // exit will be on opening tick, that's when BarNum updates.
+
+            double close = Bars.Close[0];
+            int mp = StrategyInfo.MarketPosition;
+            bool closingTick = Bars.Status == EBarState.Close;
+
+            // 27528
+            if (Bars.CurrentBar == 27528 - Maxbars && closingTick)
+            {
+                LeStp1.Send(close, 100000);
+            }
+
+            if (Bars.CurrentBar == 27538 - Maxbars && closingTick)
+            {
+                LeStp2.Send(close, 100000);
+            }
+
+            // 27560 
+            if (Bars.CurrentBar == 27560 - Maxbars && closingTick)
+            {
+                LeStp3.Send(close, 100000);
+            }
+
+            // exits
+            if (mp > 0)
+            {
+                // 27554
+                if (Bars.CurrentBar == 27554 - Maxbars)
+                {
+                    LxLmt11.Send(close, 50000);
+                }
+
+                // 27564
+                if (Bars.CurrentBar == 27567 - Maxbars)
+                {
+                    LxLmt12.Send(close, 50000);
+                }
+
+                // 27662
+                if (Bars.CurrentBar == 27662 - Maxbars)
+                {
+                    LxLmt21.Send(close, 50000);
+                }
+
+                // 27697
+                if (Bars.CurrentBar == 27697 - Maxbars)
+                {
+                    LxLmt22.Send(close, 50000);
+                }
+
+                // 27633
+                if (Bars.CurrentBar == 27633 - Maxbars)
+                {
+                    LxLmt31.Send(close, 50000);
+                }
+
+                if (Bars.CurrentBar == 27732 - Maxbars)
+                {
+                    LxLmt32.Send(close, 50000);
+                }
+            }
+        }
+        private void StrategyTest2()
+        {
+            // three same entries with two exits
+            // fromeach exit, send x contracts
+
+            double close = Bars.Close[0];
+            int mp = StrategyInfo.MarketPosition;
+            bool closingTick = Bars.Status == EBarState.Close;
+
+            // first entries
+            if (Bars.CurrentBar == 27528 - Maxbars && closingTick)
+            {
+                LeStp1.Send(close, 100000);
+            }
+
+            if (Bars.CurrentBar == 27530 - Maxbars && closingTick)
+            {
+                LeStp1.Send(close, 100000);
+            }
+
+            if (Bars.CurrentBar == 27532 - Maxbars && closingTick)
+            {
+                LeStp1.Send(close, 100000);
+            }
+
+           
+
+            // exits
+            if (mp > 0)
+            {
+                // Entry 1 first exit
+                if (Bars.CurrentBar == 27574 - Maxbars)
+                {
+                    //LxLmt11.Send(close, 100000);
+                    LxLmt11.SendFromEntry(close, 50000, "LeStp1");
+                }
+
+                // Entry 1 second exit
+                if (Bars.CurrentBar == 27595 - Maxbars)
+                {
+                    LxLmt12.SendFromEntry(close, 50000, "LeStp1");
+                }
+            }
+        }
+        private void StrategyTest3()
+        {
+            // three same entries with two exits
+            // Test FromEachTotal()
+            // fills the first entry first. then second ...
+
+
+            double close = Bars.Close[0];
+            int mp = StrategyInfo.MarketPosition;
+            bool closingTick = Bars.Status == EBarState.Close;
+
+            // first entries
+            if (Bars.CurrentBar == 27528 - Maxbars && closingTick)
+            {
+                LeStp1.Send(close, 100000);
+            }
+
+            if (Bars.CurrentBar == 27530 - Maxbars && closingTick)
+            {
+                LeStp1.Send(close, 100000);
+            }
+
+            if (Bars.CurrentBar == 27532 - Maxbars && closingTick)
+            {
+                LeStp1.Send(close, 100000);
+            }
+
+            // exits
+            if (mp > 0)
+            {
+                // Entry 1 first exit
+                if (Bars.CurrentBar == 27574 - Maxbars && closingTick)
+                {
+                    LxLmt11.SendFromEntry(close, 150000, "LeStp1");
+                }
+
+                // Entry 1 second exit
+                if (Bars.CurrentBar == 27595 - Maxbars && closingTick)
+                {
+                    LxLmt12.SendFromEntry("CloseAll", close, 150000, "LeStp1");
+                }
+            }
+        }
+        private void StrategyTest4()
+        {
+            // three same entries with two exits
+            // Test FromEachTotal()
+            // fills the first entry first. then second ...
+            // test if we can just Send() or do we need to SendFromEntry()
+            // we can use either Send() or SendFromEntry()
+
+            double close = Bars.Close[0];
+            int mp = StrategyInfo.MarketPosition;
+            bool closingTick = Bars.Status == EBarState.Close;
+
+            // first entries
+            if (Bars.CurrentBar == 27528 - Maxbars && closingTick)
+            {
+                LeStp1.Send(close, 100000);
+            }
+
+            if (Bars.CurrentBar == 27530 - Maxbars && closingTick)
+            {
+                LeStp1.Send(close, 100000);
+            }
+
+            if (Bars.CurrentBar == 27532 - Maxbars && closingTick)
+            {
+                LeStp1.Send(close, 100000);
+            }
+
+            // exits
+            if (mp > 0)
+            {
+                // Entry 1 first exit
+                if (Bars.CurrentBar == 27574 - Maxbars && closingTick)
+                {
+                    //LxLmt11.SendFromEntry(close, 150000, "LeStp1");
+                    LxLmt11.Send(close, 150000);
+                }
+
+                // Entry 1 second exit
+                if (Bars.CurrentBar == 27595 - Maxbars && closingTick)
+                {
+                    //LxLmt12.SendFromEntry("CloseAll", close, 150000, "LeStp1");
+                    LxLmt12.Send("CloseAll", close, 150000);
+                }
+            }
+        }
+        private void StrategyTest5()
+        {
+            // three same entries with two exits
+            // Test FromEachTotal()
+            // fills the first entry first. then second ...
+            // test if we can just Send() or do we need to SendFromEntry()
+            // we can use either Send() or SendFromEntry()
+            // if that is the case ..
+            // what is SendFromEntry() for ?
+            // and how to update trade info ?
+
+            double close = Bars.Close[0];
+            int mp = StrategyInfo.MarketPosition;
+            bool closingTick = Bars.Status == EBarState.Close;
+
+            // first entries
+            if (Bars.CurrentBar == 27528 - Maxbars && closingTick)
+            {
+                LeStp1.Send(close, 100000);
+            }
+
+            if (Bars.CurrentBar == 27530 - Maxbars && closingTick)
+            {
+                LeStp1.Send(close, 100000);
+            }
+
+            if (Bars.CurrentBar == 27532 - Maxbars && closingTick)
+            {
+                LeStp1.Send(close, 100000);
+            }
+
+            // exits
+            if (mp > 0)
+            {
+                // Entry 1 first exit
+                if (Bars.CurrentBar == 27574 - Maxbars && closingTick)
+                {
+                    //LxLmt11.SendFromEntry(close, 150000, "LeStp1");
+                    LxLmt11.Send(close, 150000);
+                }
+
+                // Entry 1 second exit
+                if (Bars.CurrentBar == 27595 - Maxbars && closingTick)
+                {
+                    //LxLmt12.SendFromEntry("CloseAll", close, 150000, "LeStp1");
+                    LxLmt12.Send("CloseAll", close, 150000);
+                }
+            }
+        }
+
+
+
         #endregion
 
         #region Object Initialization - Create()
@@ -62,29 +315,99 @@ namespace PowerLanguage.Strategy
         {
             switch (EntrySelection)
             {
+                case 1:
+                    EntryOrdersSet1();
+                    break;
+
                 default:
                     break;
             }
 
             switch (ExitSelection)
             {
+                case 1:
+                    ExitOrdersSet1();
+                    break;
+
+                case 2:
+                    ExitOrdersSet2();
+                    break;
+
+                case 3:
+                    ExitOrdersSet3();
+                    break;
+
                 default:
                     break;
             }
         }
+        IOrderPriced LeStp1, LeStp2, LeStp3;
+        IOrderPriced LxLmt11, LxLmt21, LxLmt31;
+        IOrderPriced LxLmt12, LxLmt22, LxLmt32;
+        IOrderPriced SeStp1, SeStp2, SeStp3;
         private void EntryOrdersSet1()
         {
+            LeStp1 = OrderCreator.Stop(new SOrderParameters(
+                Contracts.UserSpecified, "LeStp1", EOrderAction.Buy));
 
+            LeStp2 = OrderCreator.Stop(new SOrderParameters(
+               Contracts.UserSpecified, "LeStp2", EOrderAction.Buy));
+
+            LeStp3 = OrderCreator.Stop(new SOrderParameters(
+               Contracts.UserSpecified, "LeStp3", EOrderAction.Buy));
         }
         private void ExitOrdersSet1()
         {
+            // assign to entry 1
+            LxLmt11 = OrderCreator.Limit(new SOrderParameters(
+                Contracts.UserSpecified, "LxLmt11", EOrderAction.Sell, OrderExit.FromEntryTotal(LeStp1)));
 
+            LxLmt12 = OrderCreator.Limit(new SOrderParameters(
+                Contracts.UserSpecified, "LxLmt12", EOrderAction.Sell, OrderExit.FromEntryTotal(LeStp1)));
+
+            // assign to entry 2
+            LxLmt21 = OrderCreator.Limit(new SOrderParameters(
+                Contracts.UserSpecified, "LxLmt21", EOrderAction.Sell, OrderExit.FromEntryTotal(LeStp2)));
+
+            LxLmt22 = OrderCreator.Limit(new SOrderParameters(
+                Contracts.UserSpecified, "LxLmt22", EOrderAction.Sell, OrderExit.FromEntryTotal(LeStp2)));
+
+            // assign to entry 3
+            LxLmt31 = OrderCreator.Limit(new SOrderParameters(
+                Contracts.UserSpecified, "LxLmt31", EOrderAction.Sell, OrderExit.FromEntryTotal(LeStp3)));
+
+            LxLmt32 = OrderCreator.Limit(new SOrderParameters(
+                Contracts.UserSpecified, "LxLmt32", EOrderAction.Sell, OrderExit.FromEntryTotal(LeStp3)));
         }
+        private void ExitOrdersSet2()
+        {
+            // assign to entry 1
+            LxLmt11 = OrderCreator.Limit(new SOrderParameters(
+                Contracts.UserSpecified, "LxLmt11", EOrderAction.Sell, OrderExit.FromEntry(LeStp1)));
+
+            LxLmt12 = OrderCreator.Limit(new SOrderParameters(
+                Contracts.UserSpecified, "LxLmt12", EOrderAction.Sell, OrderExit.FromEntry(LeStp1)));
+        }
+        private void ExitOrdersSet3()
+        {
+            // test from each total
+
+            // assign to entry 1
+            LxLmt11 = OrderCreator.Limit(new SOrderParameters(
+                Contracts.UserSpecified, "LxLmt11", EOrderAction.Sell, OrderExit.FromEntryTotal(LeStp1)));
+
+            LxLmt12 = OrderCreator.Limit(new SOrderParameters(
+                Contracts.UserSpecified, "LxLmt12", EOrderAction.Sell, OrderExit.FromEntryTotal(LeStp1)));
+        }
+
+
         #endregion
 
         #region Object State - StartCalc()
+        int Maxbars;
         protected override void StartCalc()
         {
+            Maxbars = ExecInfo.MaxBarsBack;
         }
         #endregion
 
