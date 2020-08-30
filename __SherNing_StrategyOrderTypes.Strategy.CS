@@ -47,14 +47,14 @@ namespace PowerLanguage.Strategy
         public __SherNing_StrategyOrderTypes(object _ctx) : base(_ctx)
         {
             EntrySelection = 1;
-            ExitSelection = 3;
+            ExitSelection = 4;
         }
         #endregion
 
         #region Program Main - CalcBar()
         protected override void CalcBar()
         {
-            StrategyTest4();
+            StrategyTest5();
         }
 
         private void StrategyTest1()
@@ -148,7 +148,7 @@ namespace PowerLanguage.Strategy
                 LeStp1.Send(close, 100000);
             }
 
-           
+
 
             // exits
             if (mp > 0)
@@ -270,19 +270,20 @@ namespace PowerLanguage.Strategy
             double close = Bars.Close[0];
             int mp = StrategyInfo.MarketPosition;
             bool closingTick = Bars.Status == EBarState.Close;
+            int time = Bars.Time[0].Hour * 100 + Bars.Time[0].Minute;
 
             // first entries
-            if (Bars.CurrentBar == 27528 - Maxbars && closingTick)
+            if (time == 2100 && closingTick)
             {
                 LeStp1.Send(close, 100000);
             }
 
-            if (Bars.CurrentBar == 27530 - Maxbars && closingTick)
+            if (time == 2200 && closingTick)
             {
                 LeStp1.Send(close, 100000);
             }
 
-            if (Bars.CurrentBar == 27532 - Maxbars && closingTick)
+            if (time == 2300 && closingTick)
             {
                 LeStp1.Send(close, 100000);
             }
@@ -291,17 +292,17 @@ namespace PowerLanguage.Strategy
             if (mp > 0)
             {
                 // Entry 1 first exit
-                if (Bars.CurrentBar == 27574 - Maxbars && closingTick)
+                if (time == 0200 && closingTick)
                 {
                     //LxLmt11.SendFromEntry(close, 150000, "LeStp1");
-                    LxLmt11.Send(close, 150000);
+                    LxLmt11.Send(close, 50000);
                 }
 
                 // Entry 1 second exit
-                if (Bars.CurrentBar == 27595 - Maxbars && closingTick)
+                if (time == 0400 && closingTick)
                 {
                     //LxLmt12.SendFromEntry("CloseAll", close, 150000, "LeStp1");
-                    LxLmt12.Send("CloseAll", close, 150000);
+                    LxLmt12.Send("CloseAll", close, 50000);
                 }
             }
         }
@@ -335,6 +336,10 @@ namespace PowerLanguage.Strategy
 
                 case 3:
                     ExitOrdersSet3();
+                    break;
+
+                case 4:
+                    ExitOrdersSet4();
                     break;
 
                 default:
@@ -399,6 +404,20 @@ namespace PowerLanguage.Strategy
             LxLmt12 = OrderCreator.Limit(new SOrderParameters(
                 Contracts.UserSpecified, "LxLmt12", EOrderAction.Sell, OrderExit.FromEntryTotal(LeStp1)));
         }
+        private void ExitOrdersSet4()
+        {
+            // test from each total
+
+            // assign to entry 1
+            //LxLmt11 = OrderCreator.Limit(new SOrderParameters(
+            //    Contracts.UserSpecified, "LxLmt11", EOrderAction.Sell, OrderExit.FromEntryTotal(LeStp1)));
+
+            LxLmt11 = OrderCreator.Limit(new SOrderParameters(
+                Contracts.UserSpecified, "LxLmt11", EOrderAction.Sell, OrderExit.FromAll));
+
+            LxLmt12 = OrderCreator.Limit(new SOrderParameters(
+                Contracts.UserSpecified, "LxLmt12", EOrderAction.Sell, OrderExit.FromAll));
+        }
 
 
         #endregion
@@ -410,6 +429,76 @@ namespace PowerLanguage.Strategy
             Maxbars = ExecInfo.MaxBarsBack;
         }
         #endregion
+
+        #region Print Functions
+        private bool DebugMode = true;
+        private void Print(string message)
+        {
+            // print messages if debug mode == true.
+            if (DebugMode == false) return;
+
+            // Print who is calling Print()
+            StackTrace stackTrace = new StackTrace();
+
+            Output.WriteLine("Project:  {0}   |   Caller:  {1}   |   Bar Time:  {2}   |   Message:  {3}",
+                Name,
+                stackTrace.GetFrame(1).GetMethod().Name,
+                Bars.TimeValue.ToString("dd-MM-yy HH:mm:ss tt"),
+                message);
+        }
+        private void Print(string message, int chartbarNum)
+        {
+            int maxbars = ExecInfo.MaxBarsBack;
+            if (Bars.CurrentBar == chartbarNum - maxbars)
+                Print(message);
+        }
+        #endregion
+    }
+}
+
+namespace PowerLanguage.Function
+{
+    public sealed class TradePlan : FunctionSimple<int>
+    {
+        #region Documentations
+        //=========================================================================================
+        // Project Name : Trade Plan
+        // Description  : Setup and Execution of Trade Plan
+        // Objectives   : Trade Execution Mastery (IOG.Enabled / Disabled)
+        // Type         : Function
+        // Version      : v1.0
+        // Date         : 30 - Aug - 2020
+        // Time Taken   : 
+        // Remarks      : Test Framework
+        //=========================================================================================
+        // Copyright    : 2020, Sher Ning Quantitative Technologies           
+        // License      : Nil
+        // Client       : Nil
+        // Details      : sherning@hotmail.com
+        //=========================================================================================
+
+        /*/
+         *----------------------------------- Version Objectives ----------------------------------
+         *  1.0.0 - Design, goals and outline
+         * ---------------------------------- Version Objectives ----------------------------------
+        /*/
+
+        /*/
+         *------------------------------------ Versions History -----------------------------------
+         *  0.0.0 - Base Version
+         *------------------------------------ Versions History -----------------------------------
+        /*/
+
+        #endregion
+
+        public TradePlan(CStudyControl m) : base(m)
+        {
+
+        }
+        protected override int CalcBar()
+        {
+            throw new NotImplementedException();
+        }
 
         #region Print Functions
         private bool DebugMode = true;
