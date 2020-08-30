@@ -462,24 +462,26 @@ namespace PowerLanguage.Function
     {
         #region Documentations
         //=========================================================================================
-        // Project Name : Trade Plan
-        // Description  : Setup and Execution of Trade Plan
-        // Objectives   : Trade Execution Mastery (IOG.Enabled / Disabled)
+        // Project Name : Trade Plan Practice
+        // Requirements : 1. Entry Order Types (Stop, limit, stop limit orders)
+        //                2. 1 to 3 profit exits, and 1 stop loss
+        //                3. Send an entry, one at a time up to 3 entries max
+        //
         // Type         : Function
         // Version      : v1.0
         // Date         : 30 - Aug - 2020
         // Time Taken   : 
-        // Remarks      : Test Framework
+        // Remarks      : Requirements, Architecture, Development, Optimization, Maintenance
         //=========================================================================================
         // Copyright    : 2020, Sher Ning Quantitative Technologies           
-        // License      : Nil
-        // Client       : Nil
-        // Details      : sherning@hotmail.com
+        // License      :
+        // Client       :
+        // Contact      : 
         //=========================================================================================
 
         /*/
          *----------------------------------- Version Objectives ----------------------------------
-         *  1.0.0 - Design, goals and outline
+         *  1.0.0 - Requirements and programming architecture
          * ---------------------------------- Version Objectives ----------------------------------
         /*/
 
@@ -491,14 +493,60 @@ namespace PowerLanguage.Function
 
         #endregion
 
-        public TradePlan(CStudyControl m) : base(m)
+        #region Main
+        protected override int CalcBar()
+        {
+            return 0;
+        }
+        #endregion
+
+        #region Properties
+        #endregion
+
+        #region Fields
+        EMarketPositionSide PosSide;
+        bool IsEntryOrderFilled;
+        int EntryQty, ProfitQty1, ProfitQty2, ProfitQty3;
+
+        // market position is for the entire trade plan
+
+        #endregion
+
+        #region Constructor
+        public TradePlan(CStudyControl m, EMarketPositionSide side) : base(m)
+        {
+            // set position side during object initialization
+            PosSide = side;
+        }
+        #endregion
+
+        #region Public Methods
+        public void SetLimitOrder(double price, int contracts, int timeInForce = 999)
         {
 
         }
-        protected override int CalcBar()
+
+        public void SetStopOrder(double price, int contracts, int timeInForce = 999)
         {
-            throw new NotImplementedException();
+
         }
+
+        public void SetStopLimitOrder(double stopPrice, double limitPrice, int contracts, int timeInForce = 999)
+        {
+
+        }
+        #endregion
+
+        #region Private Methods
+        private void LongPosManager()
+        {
+
+        }
+        private void ShortPosManager()
+        {
+
+        }
+        #endregion
 
         #region Print Functions
         private bool DebugMode = true;
