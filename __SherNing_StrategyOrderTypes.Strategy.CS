@@ -55,6 +55,7 @@ namespace PowerLanguage.Strategy
         protected override void CalcBar()
         {
             StrategyTest5();
+            LTradePlan.Call();
         }
 
         private void StrategyTest1()
@@ -312,8 +313,11 @@ namespace PowerLanguage.Strategy
         #endregion
 
         #region Object Initialization - Create()
+        TradePlan LTradePlan;
         protected override void Create()
         {
+            LTradePlan = new TradePlan(this, EMarketPositionSide.Long);
+
             switch (EntrySelection)
             {
                 case 1:
@@ -482,6 +486,7 @@ namespace PowerLanguage.Function
         /*/
          *----------------------------------- Version Objectives ----------------------------------
          *  1.0.0 - Requirements and programming architecture
+         *  1.0.1 - Data Structures for TradePlan
          * ---------------------------------- Version Objectives ----------------------------------
         /*/
 
@@ -496,6 +501,11 @@ namespace PowerLanguage.Function
         #region Main
         protected override int CalcBar()
         {
+            if (Bars.CurrentBar == 100)
+            {
+              
+
+            }
             return 0;
         }
         #endregion
@@ -505,9 +515,10 @@ namespace PowerLanguage.Function
 
         #region Fields
         EMarketPositionSide PosSide;
-        bool IsEntryOrderFilled;
-        int EntryQty, ProfitQty1, ProfitQty2, ProfitQty3;
+        protected override void StartCalc()
+        {
 
+        }
         // market position is for the entire trade plan
 
         #endregion
@@ -538,14 +549,81 @@ namespace PowerLanguage.Function
         #endregion
 
         #region Private Methods
-        private void LongPosManager()
+        private void LongPositionManager()
         {
 
         }
-        private void ShortPosManager()
+
+        private void LongEntryManager()
         {
 
         }
+
+        private void LongExitManager()
+        {
+
+        }
+
+        private void ShortPositionManager()
+        {
+
+        }
+
+        private void ShortEntryManager()
+        {
+
+        }
+
+        private void ShortExitManager()
+        {
+
+        }
+        #endregion
+
+        #region Internal Data Structure
+        struct Entry
+        {
+            // entry prices
+            public double Price { get; set; }
+            public double StopPrice { get; set; }
+            public double LimitPrice { get; set; }
+
+            // entry info
+            public int Quantity { get; set; }
+            public int TickNumber { get; set; }
+            public int TimeInForce { get; set; }
+
+            // entry state
+            public bool Send { get; set; }
+            public bool CancelOrder { get; set; }
+            public bool PriceLock { get; set; }
+            public bool PrintEntryTextOnce { get; set; }
+            public bool OrderFilled { get; set; }
+          
+        }
+
+        struct Profit
+        {
+            public double Price { get; set; }
+            public int Quantity { get; set; }
+            public int TickNumber { get; set; }
+            public bool Send { get; set; }
+            public bool CancelOrder { get; set; }
+            public bool PrintProfitTextOnce { get; set; }
+            public bool PriceLock { get; set; }
+        }
+
+        struct StopLoss
+        {
+            public double Price { get; set; }
+            public int Quantity { get; set; }
+            public int TickNumber { get; set; }
+            public bool Send { get; set; }
+            public bool CancelOrder { get; set; }
+            public bool PrintStopLossTextOnce { get; set; }
+            public bool PriceLock { get; set; }
+        }
+
         #endregion
 
         #region Print Functions
