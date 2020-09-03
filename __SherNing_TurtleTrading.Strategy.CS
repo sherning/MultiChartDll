@@ -31,6 +31,9 @@ namespace PowerLanguage.Strategy
         /*/
          *----------------------------------- Version Objectives ----------------------------------
          *  1.0.0 - Requirements
+         *  1.0.1 - Design
+         *        - MaxBarBacks must be set in strategy properties
+         *        - Add and test various components required to build Turtle Strategy
          * ---------------------------------- Version Objectives ----------------------------------
         /*/
 
@@ -60,6 +63,7 @@ namespace PowerLanguage.Strategy
         protected override void StartCalc()
         {
             // assign inputs 
+            
         }
         #endregion
 
@@ -71,6 +75,15 @@ namespace PowerLanguage.Strategy
         #endregion
 
         #region Private Methods
+        private double MovingAverage(int length)
+        {
+            // include current close
+            double sum = 0;
+            for (int i = 0; i < length; i++)
+                sum += Bars.Close[i];
+
+            return sum / length;
+        }
         private double ATR(int length)
         {
             // deafult ATR calculations includes current bar
@@ -108,8 +121,12 @@ namespace PowerLanguage.Strategy
         #region Plot
         private void PlotStrategy()
         {
+            // good way to test if internal function is working visually
             StrategyInfo.SetPlotValue(1, HighestHigh(10));
+            StrategyInfo.SetPlotValue(11, HighestHigh(200));
             StrategyInfo.SetPlotValue(2, LowestLow(10));
+            StrategyInfo.SetPlotValue(12, LowestLow(200));
+            StrategyInfo.SetPlotValue(3, MovingAverage(200));
             StrategyInfo.SetPlotValue(10, ATR(14));
         }
         #endregion

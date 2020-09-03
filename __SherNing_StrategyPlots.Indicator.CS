@@ -14,6 +14,7 @@ namespace PowerLanguage.Indicator
         // Project Name : Strategy Plots
         // Requirements : 1. GetPlotValues from strategy
         //                2. Plot the values from the strategy on the chart
+        //                3. Input settings to change width and color
         //
         // Type         : Indicator
         // Version      : v1.0
