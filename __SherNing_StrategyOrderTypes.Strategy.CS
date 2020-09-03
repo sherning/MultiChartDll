@@ -41,7 +41,7 @@ namespace PowerLanguage.Strategy
 
         #endregion
 
-        #region Object Properties & Constructor
+        #region Properties & Constructor
         [Input] public int EntrySelection { get; set; }
         [Input] public int ExitSelection { get; set; }
         public __SherNing_StrategyOrderTypes(object _ctx) : base(_ctx)
@@ -55,7 +55,6 @@ namespace PowerLanguage.Strategy
         protected override void CalcBar()
         {
             StrategyTest5();
-            LTradePlan.Call();
         }
 
         private void StrategyTest1()
@@ -307,17 +306,15 @@ namespace PowerLanguage.Strategy
                 }
             }
         }
-
-
-
         #endregion
 
-        #region Object Initialization - Create()
-        TradePlan LTradePlan;
+        #region References
+        IOrderPriced LeStp1, LeStp2, LeStp3;
+        IOrderPriced LxLmt11, LxLmt21, LxLmt31;
+        IOrderPriced LxLmt12, LxLmt22, LxLmt32;
+        IOrderPriced SeStp1, SeStp2, SeStp3;
         protected override void Create()
         {
-            LTradePlan = new TradePlan(this, EMarketPositionSide.Long);
-
             switch (EntrySelection)
             {
                 case 1:
@@ -349,11 +346,10 @@ namespace PowerLanguage.Strategy
                 default:
                     break;
             }
+
+            // during debug, create will be called
+            Output.Clear();
         }
-        IOrderPriced LeStp1, LeStp2, LeStp3;
-        IOrderPriced LxLmt11, LxLmt21, LxLmt31;
-        IOrderPriced LxLmt12, LxLmt22, LxLmt32;
-        IOrderPriced SeStp1, SeStp2, SeStp3;
         private void EntryOrdersSet1()
         {
             LeStp1 = OrderCreator.Stop(new SOrderParameters(
@@ -422,11 +418,9 @@ namespace PowerLanguage.Strategy
             LxLmt12 = OrderCreator.Limit(new SOrderParameters(
                 Contracts.UserSpecified, "LxLmt12", EOrderAction.Sell, OrderExit.FromAll));
         }
-
-
         #endregion
 
-        #region Object State - StartCalc()
+        #region Fields
         int Maxbars;
         protected override void StartCalc()
         {
@@ -460,194 +454,3 @@ namespace PowerLanguage.Strategy
     }
 }
 
-namespace PowerLanguage.Function
-{
-    public sealed class TradePlan : FunctionSimple<int>
-    {
-        #region Documentations
-        //=========================================================================================
-        // Project Name : Trade Plan Practice
-        // Requirements : 1. Entry Order Types (Stop, limit, stop limit orders)
-        //                2. 1 to 3 profit exits, and 1 stop loss
-        //                3. Send an entry, one at a time up to 3 entries max
-        //
-        // Type         : Function
-        // Version      : v1.0
-        // Date         : 30 - Aug - 2020
-        // Time Taken   : 
-        // Remarks      : Requirements, Architecture, Development, Optimization, Maintenance
-        //=========================================================================================
-        // Copyright    : 2020, Sher Ning Quantitative Technologies           
-        // License      :
-        // Client       :
-        // Contact      : 
-        //=========================================================================================
-
-        /*/
-         *----------------------------------- Version Objectives ----------------------------------
-         *  1.0.0 - Requirements and programming architecture
-         *  1.0.1 - Data Structures for TradePlan
-         * ---------------------------------- Version Objectives ----------------------------------
-        /*/
-
-        /*/
-         *------------------------------------ Versions History -----------------------------------
-         *  0.0.0 - Base Version
-         *------------------------------------ Versions History -----------------------------------
-        /*/
-
-        #endregion
-
-        #region Main
-        protected override int CalcBar()
-        {
-            if (Bars.CurrentBar == 100)
-            {
-              
-
-            }
-            return 0;
-        }
-        #endregion
-
-        #region Properties
-        #endregion
-
-        #region Fields
-        EMarketPositionSide PosSide;
-        protected override void StartCalc()
-        {
-
-        }
-        // market position is for the entire trade plan
-
-        #endregion
-
-        #region Constructor
-        public TradePlan(CStudyControl m, EMarketPositionSide side) : base(m)
-        {
-            // set position side during object initialization
-            PosSide = side;
-        }
-        #endregion
-
-        #region Public Methods
-        public void SetLimitOrder(double price, int contracts, int timeInForce = 999)
-        {
-
-        }
-
-        public void SetStopOrder(double price, int contracts, int timeInForce = 999)
-        {
-
-        }
-
-        public void SetStopLimitOrder(double stopPrice, double limitPrice, int contracts, int timeInForce = 999)
-        {
-
-        }
-        #endregion
-
-        #region Private Methods
-        private void LongPositionManager()
-        {
-
-        }
-
-        private void LongEntryManager()
-        {
-
-        }
-
-        private void LongExitManager()
-        {
-
-        }
-
-        private void ShortPositionManager()
-        {
-
-        }
-
-        private void ShortEntryManager()
-        {
-
-        }
-
-        private void ShortExitManager()
-        {
-
-        }
-        #endregion
-
-        #region Internal Data Structure
-        struct Entry
-        {
-            // entry prices
-            public double Price { get; set; }
-            public double StopPrice { get; set; }
-            public double LimitPrice { get; set; }
-
-            // entry info
-            public int Quantity { get; set; }
-            public int TickNumber { get; set; }
-            public int TimeInForce { get; set; }
-
-            // entry state
-            public bool Send { get; set; }
-            public bool CancelOrder { get; set; }
-            public bool PriceLock { get; set; }
-            public bool PrintEntryTextOnce { get; set; }
-            public bool OrderFilled { get; set; }
-          
-        }
-
-        struct Profit
-        {
-            public double Price { get; set; }
-            public int Quantity { get; set; }
-            public int TickNumber { get; set; }
-            public bool Send { get; set; }
-            public bool CancelOrder { get; set; }
-            public bool PrintProfitTextOnce { get; set; }
-            public bool PriceLock { get; set; }
-        }
-
-        struct StopLoss
-        {
-            public double Price { get; set; }
-            public int Quantity { get; set; }
-            public int TickNumber { get; set; }
-            public bool Send { get; set; }
-            public bool CancelOrder { get; set; }
-            public bool PrintStopLossTextOnce { get; set; }
-            public bool PriceLock { get; set; }
-        }
-
-        #endregion
-
-        #region Print Functions
-        private bool DebugMode = true;
-        private void Print(string message)
-        {
-            // print messages if debug mode == true.
-            if (DebugMode == false) return;
-
-            // Print who is calling Print()
-            StackTrace stackTrace = new StackTrace();
-
-            Output.WriteLine("Project:  {0}   |   Caller:  {1}   |   Bar Time:  {2}   |   Message:  {3}",
-                Name,
-                stackTrace.GetFrame(1).GetMethod().Name,
-                Bars.TimeValue.ToString("dd-MM-yy HH:mm:ss tt"),
-                message);
-        }
-        private void Print(string message, int chartbarNum)
-        {
-            int maxbars = ExecInfo.MaxBarsBack;
-            if (Bars.CurrentBar == chartbarNum - maxbars)
-                Print(message);
-        }
-        #endregion
-    }
-}
