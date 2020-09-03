@@ -66,10 +66,22 @@ namespace PowerLanguage.Strategy
         #region Main
         protected override void CalcBar()
         {
+            PlotStrategy();
         }
         #endregion
 
         #region Private Methods
+        private double ATR(int length)
+        {
+            // deafult ATR calculations includes current bar
+            double sum = 0;
+
+            // i is bars back
+            for (int i = 0; i < length; i++)
+                sum += Bars.Range(i);
+
+            return sum / length;
+        }
         private double HighestHigh(int length)
         {
             double ret = 0;
@@ -98,6 +110,7 @@ namespace PowerLanguage.Strategy
         {
             StrategyInfo.SetPlotValue(1, HighestHigh(10));
             StrategyInfo.SetPlotValue(2, LowestLow(10));
+            StrategyInfo.SetPlotValue(10, ATR(14));
         }
         #endregion
 

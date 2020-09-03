@@ -42,11 +42,37 @@ namespace PowerLanguage.Indicator
         #endregion
 
         #region Properties
-        [Input] public int Plot_1 { get; set; }
-        [Input] public int Plot_2 { get; set; }
-        [Input] public int Plot_3 { get; set; }
-        [Input] public int Plot_4 { get; set; }
-        public __SherNing_StrategyPlots(object _ctx) : base(_ctx) { }
+        [Input] public string Plot_1_Settings { get; set; }
+        [Input] public int Plot_1_Num { get; set; }
+        [Input] public int Plot_1_Width { get; set; }
+        [Input] public Color Plot_1_Color { get; set; }
+
+        [Input] public string Plot_2_Settings { get; set; }
+        [Input] public int Plot_2_Num { get; set; }
+        [Input] public int Plot_2_Width { get; set; }
+        [Input] public Color Plot_2_Color { get; set; }
+
+        [Input] public string Plot_3_Settings { get; set; }
+        [Input] public int Plot_3_Num { get; set; }
+        [Input] public int Plot_3_Width { get; set; }
+        [Input] public Color Plot_3_Color { get; set; }
+
+        [Input] public string Plot_4_Settings { get; set; }
+        [Input] public int Plot_4_Num { get; set; }
+        [Input] public int Plot_4_Width { get; set; }
+        [Input] public Color Plot_4_Color { get; set; }
+        public __SherNing_StrategyPlots(object _ctx) : base(_ctx)
+        {
+            Plot_1_Settings = "Plot 1 Settings";
+            Plot_2_Settings = "Plot 2 Settings";
+            Plot_3_Settings = "Plot 3 Settings";
+            Plot_4_Settings = "Plot 4 Settings";
+
+            // set default colors and width
+            Plot_1_Color = Plot_2_Color = Color.DeepPink; // 255,0,128
+            Plot_3_Color = Plot_4_Color = Color.FromArgb(128, 128, 255);
+            Plot_1_Width = Plot_2_Width = Plot_3_Width = Plot_4_Width = 1;
+        }
 
         #endregion
 
@@ -69,22 +95,17 @@ namespace PowerLanguage.Indicator
                     AddPlot(new PlotAttributes(
                         plotNames[i],
                         EPlotShapes.Line,
-                        Color.Yellow, Color.Yellow,
+                        // default color 
+                        Color.White, Color.White,
+                        // default width
                         3, EPlotStyle.Solid, true)));
             }
         }
         #endregion
 
         #region Fields
-        int[] PlotNumbers;
         protected override void StartCalc()
         {
-            PlotNumbers = new int[NumOfPlots + 1];
-            PlotNumbers[0] = 0;
-            PlotNumbers[1] = Plot_1;
-            PlotNumbers[2] = Plot_2;
-            PlotNumbers[3] = Plot_3;
-            PlotNumbers[4] = Plot_4;
         }
         #endregion
 
@@ -92,11 +113,22 @@ namespace PowerLanguage.Indicator
         protected override void CalcBar()
         {
             // indicator logic 
-            for (int i = 1; i <= NumOfPlots; i++)
-            {
-                if (StrategyInfo.GetPlotValue(i) != 0 && PlotNumbers[i] != 0)
-                    PlotList[i].Set(StrategyInfo.GetPlotValue(PlotNumbers[i]));
-            }
+
+            // plot 1
+            if (StrategyInfo.GetPlotValue(Plot_1_Num) != 0)
+                PlotList[1].Set(StrategyInfo.GetPlotValue(Plot_1_Num), Plot_1_Color, Plot_1_Width);
+
+            // plot 2
+            if (StrategyInfo.GetPlotValue(Plot_2_Num) != 0)
+                PlotList[2].Set(StrategyInfo.GetPlotValue(Plot_2_Num), Plot_2_Color, Plot_2_Width);
+
+            // plot 3
+            if (StrategyInfo.GetPlotValue(Plot_3_Num) != 0)
+                PlotList[3].Set(StrategyInfo.GetPlotValue(Plot_3_Num), Plot_3_Color, Plot_3_Width);
+
+            // plot 4
+            if (StrategyInfo.GetPlotValue(Plot_4_Num) != 0)
+                PlotList[4].Set(StrategyInfo.GetPlotValue(Plot_4_Num), Plot_4_Color, Plot_4_Width);
         }
         #endregion
 
