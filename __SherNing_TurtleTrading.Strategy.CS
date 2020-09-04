@@ -15,10 +15,11 @@ namespace PowerLanguage.Strategy
         // Requirements : 1. Scale-in 3 Entries (NextBar Mkt Entries)
         //                2. Trailing Exit - Donchian 10 
         //                3. Stop Loss - 2 X ATR
+        //                4. Enchance Version. Not original
         //
         // Type         : Strategy (IOG.Disabled)
-        // Version      : v1.0
-        // Date         : 03 - Sep - 2020
+        // Version      : v1.1
+        // Date         : 04 - Sep - 2020
         // Time Taken   : 
         // Remarks      : Requirements, Design, Development, Optimization, Maintenance
         //=========================================================================================
@@ -30,51 +31,403 @@ namespace PowerLanguage.Strategy
 
         /*/
          *----------------------------------- Version Objectives ----------------------------------
-         *  1.0.0 - Requirements
-         *  1.0.1 - Design
-         *        - MaxBarBacks must be set in strategy properties
-         *        - Add and test various components required to build Turtle Strategy
+         *  1.1.1 - Complete Stp Short Side
+         *        
          * ---------------------------------- Version Objectives ----------------------------------
         /*/
 
         /*/
          *------------------------------------ Versions History -----------------------------------
          *  0.0.0 - Base Version
+         *  
+         *  1.0.0 - Requirements
+         *  1.0.1 - Design
+         *        - MaxBarBacks must be set in strategy properties
+         *        - Add and test various components required to build Turtle Strategy
+         *        - Develop code in the most efficient and effective manners
+         *        - Functions are tools in my arsenal, I do not necessarily need to use them
+         *        - Good programming is about code reusability
+         *  1.0.2 - Develop LE Mkt and LX Stp entries
+         *  1.0.3 - Develop LE Stp entries
+         *        - IOG.Enabled is used if ENTRY requires intra bar calculation
+         *        - IOG.Enabled is used if you need to track intrabar MP
+         *        - Test with 200 MA
          *------------------------------------ Versions History -----------------------------------
         /*/
 
         #endregion
 
         #region Properties
+        [Input] public int FastChannelLength { get; set; }
+        [Input] public int SlowChannelLength { get; set; }
+        [Input] public int AtrLength { get; set; }
+        [Input] public int MaxNumOfEntries { get; set; }
         public __SherNing_TurtleTrading(object _ctx) : base(_ctx)
         {
-
+            FastChannelLength = 10;
+            SlowChannelLength = 20;
+            AtrLength = 14;
+            MaxNumOfEntries = 3;
         }
         #endregion
 
         #region References
+        VariableSeries<int> MarketPosition;
+        IOrderMarket LeMkt, SeMkt;
+        IOrderPriced LxStp, SxStp;
+        IOrderPriced LeStp, SeStp;
         protected override void Create()
         {
+            MarketPosition = new VariableSeries<int>(this);
+
+            // strategy orders
+            LeMkt = OrderCreator.MarketNextBar(new SOrderParameters(
+                Contracts.UserSpecified, "LE", EOrderAction.Buy));
+
+            // default is from all
+            LxStp = OrderCreator.Stop(new SOrderParameters(
+                Contracts.UserSpecified, "LX", EOrderAction.Sell, OrderExit.FromAll));
+
+            // by default order exit from all
+            SxStp = OrderCreator.Stop(new SOrderParameters(
+                Contracts.UserSpecified, "SX", EOrderAction.BuyToCover));
+
+            // using stop entries
+            LeStp = OrderCreator.Stop(new SOrderParameters(
+                Contracts.UserSpecified, "LE_Stp", EOrderAction.Buy));
+
+            SeStp = OrderCreator.Stop(new SOrderParameters(
+                Contracts.UserSpecified, "SE_Stp", EOrderAction.SellShort));
+
+            // clear during debug
             Output.Clear();
         }
         #endregion
 
         #region Fields
+        int NumOfEntries;
+        double RiskValue;
+        double PrevLEntryPrice, LEntryPrice, StopLossPrice;
+        double PrevSEntryPrice, SEntryPrice;
+        bool PrintStopLossText, PrintEntryText;
         protected override void StartCalc()
         {
             // assign inputs 
-            
+            NumOfEntries = 0;
+            RiskValue = StopLossPrice = 0;
+            PrevLEntryPrice = 0;
+            PrintEntryText = PrintStopLossText = false;
+        }
+        private void PrintState()
+        {
+            // framework for print strategy state
+            Print("---------------------- Start ----------------------");
+
+            // standard strategy info
+            Print("Bar Number: " + (Bars.CurrentBar + ExecInfo.MaxBarsBack));
+            Print("Bar Status: " + Bars.Status);
+            Output.WriteLine("");
+
+            // bar info
+            Print("High: " + Bars.High[0]);
+            Print("Low: " + Bars.Low[0]);
+            Print("Open: " + Bars.Open[0]);
+            Print("Close: " + Bars.Close[0]);
+            Output.WriteLine("");
+
+            // strategy state
+            Print("Market Position: " + MarketPosition[0]);
+            Print("Num Of Entries: " + NumOfEntries);
+            Print("Risk Value: " + RiskValue);
+            Print("Prev Entry Price: " + PrevLEntryPrice);
+            Print("StopLoss Price: " + StopLossPrice);
+
+
+            Print("----------------------- End -----------------------");
+            Output.WriteLine("");
+            Output.WriteLine("");
+        }
+        private void PrintState(int chartBarNum)
+        {
+            if (Bars.CurrentBar + ExecInfo.MaxBarsBack == chartBarNum)
+                PrintState();
         }
         #endregion
 
         #region Main
         protected override void CalcBar()
         {
+            // track market position at the start of calculations
+            MarketPosition.Value = StrategyInfo.MarketPosition;
+
+            // send long entry
+            //if (SendLeMkt()) LeMkt.Send(100000);
+
+            // send stop loss 
+            //if (SendLxStp()) LxStp.Send(StopLossPrice, MarketPosition[0]);
+
+            if (SendLEntryStp()) LeStp.Send(LEntryPrice, 100000);
+
+            if (SendLExitStopLoss()) LxStp.Send(StopLossPrice, MarketPosition[0]);
+
+            if (SendSEntryStp()) SeStp.Send(SEntryPrice, 100000);
+
+            if (SendSExitStopLoss()) SxStp.Send(StopLossPrice, Math.Abs(MarketPosition[0]));
+
+            //PrintState(540);
+
             PlotStrategy();
         }
         #endregion
 
         #region Private Methods
+        private bool SendLeMkt()
+        {
+            double channel = HighestHigh(SlowChannelLength);
+
+            // max 3 entries, max contracts set with strategy properties
+            bool maxEntries = NumOfEntries < MaxNumOfEntries;
+
+            // if it is the previous entry was flat or short
+            bool firstEntry = MarketPosition[1] <= 0 && MarketPosition[0] == 0;
+
+            // entry info
+            double close = Bars.Close[0];
+
+            // if end of bar close is above or touching the channel
+            if (close >= channel && maxEntries)
+            {
+                // check if first entry
+                if (firstEntry)
+                {
+                    // initial stop loss value
+                    RiskValue = ATR(AtrLength) * 2;
+                    StopLossPrice = close - RiskValue;
+                    PrevLEntryPrice = close;
+                    NumOfEntries++;
+
+                    return true;
+                }
+
+                // second and third entry, one risk value away
+                if (MarketPosition[0] > 0 && close >= (PrevLEntryPrice + RiskValue))
+                {
+                    PrevLEntryPrice = close;
+                    NumOfEntries++;
+                    return true;
+                }
+            }
+
+            return false;
+        }
+        private bool SendLEntryStp()
+        {
+            int mp = MarketPosition[0];
+
+            // if negative return false
+            if (mp < 0) return false;
+
+            double channel = HighestHigh(FastChannelLength);
+            bool firstEntry = MarketPosition[1] <= 0 && mp == 0;
+            bool firstEntryFilled = MarketPosition[1] <= 0 && mp > 0;
+            bool newEntry = mp > 0 && mp - MarketPosition[1] > 0;
+            bool maCondition = Bars.Low[0] >= MovingAverage(200);
+
+            // first entry price = channel high
+            if (firstEntry && maCondition)
+            {
+                LEntryPrice = channel;
+                //PlotStrategyOrderOnChart("LE 1", EntryPrice, Color.DarkGreen, ref PrintEntryText);
+                return true;
+            }
+
+            // check when the first entry is filled
+            if (firstEntryFilled)
+            {
+                RiskValue = ATR(AtrLength) * 2;
+                StopLossPrice = LEntryPrice - RiskValue;
+                PrevLEntryPrice = LEntryPrice;
+                NumOfEntries++;
+            }
+
+            // second entries onwards
+            if (NumOfEntries < MaxNumOfEntries && mp > 0 && MarketPosition[1] > 0)
+            {
+                // new entry detected
+                if (newEntry)
+                {
+                    // update new price
+                    PrevLEntryPrice = LEntryPrice;
+                    PrintEntryText = false;
+                    NumOfEntries++;
+                }
+
+                LEntryPrice = PrevLEntryPrice + RiskValue;
+
+                if (NumOfEntries < MaxNumOfEntries && maCondition)
+                {
+                    // plot order lines on chart
+                    PlotStrategyOrderOnChart
+                        ("LE " + (NumOfEntries + 1), LEntryPrice, Color.DarkGreen, ref PrintEntryText);
+                    return true;
+                }
+                else
+                {
+                    return false;
+                }
+
+            }
+
+            return false;
+        }
+        private bool SendSEntryStp()
+        {
+            int mp = MarketPosition[0];
+
+            // if negative return false
+            if (mp > 0) return false;
+
+            double channel = LowestLow(FastChannelLength);
+            bool firstEntry = MarketPosition[1] >= 0 && mp == 0;
+            bool firstEntryFilled = MarketPosition[1] >= 0 && mp < 0;
+            bool newEntry = mp < 0 && mp - MarketPosition[1] < 0;
+            bool maCondition = Bars.High[0] <= MovingAverage(200);
+
+            // first entry price = channel high
+            if (firstEntry && maCondition)
+            {
+                SEntryPrice = channel;
+                //PlotStrategyOrderOnChart("LE 1", EntryPrice, Color.DarkGreen, ref PrintEntryText);
+                return true;
+            }
+
+            // check when the first entry is filled
+            if (firstEntryFilled)
+            {
+                RiskValue = ATR(AtrLength) * 2;
+                StopLossPrice = SEntryPrice + RiskValue;
+                PrevSEntryPrice = SEntryPrice;
+                NumOfEntries++;
+            }
+
+            // second entries onwards
+            if (NumOfEntries < MaxNumOfEntries && mp < 0 && MarketPosition[1] < 0)
+            {
+                // new entry detected
+                if (newEntry)
+                {
+                    // update new price
+                    PrevSEntryPrice = SEntryPrice;
+                    PrintEntryText = false;
+                    NumOfEntries++;
+                }
+
+                SEntryPrice = PrevSEntryPrice - RiskValue;
+
+                if (NumOfEntries < MaxNumOfEntries && maCondition)
+                {
+                    // plot order lines on chart
+                    PlotStrategyOrderOnChart
+                        ("SE " + (NumOfEntries + 1), SEntryPrice, Color.DarkRed, ref PrintEntryText);
+                    return true;
+                }
+                else
+                {
+                    return false;
+                }
+
+            }
+
+            return false;
+        }
+
+        private bool SendLExitStopLoss()
+        {
+            // reset after long exit
+            if (MarketPosition[1] > 0 && MarketPosition[0] <= 0)
+            {
+                // reset data and return false
+                NumOfEntries = 0;
+                RiskValue = StopLossPrice = 0;
+                PrintEntryText = PrintStopLossText = false;
+                LEntryPrice = PrevLEntryPrice = 0;
+
+                return false;
+            }
+
+            if (StopLossPrice > 0 && MarketPosition[0] > 0)
+            {
+                double channel = LowestLow(FastChannelLength);
+
+                // if close moves into 1 unit of profits, non-retracing
+                StopLossPrice = Math.Max(StopLossPrice, channel);
+
+                // print stop loss line
+                PlotStrategyOrderOnChart("SL", StopLossPrice, Color.Yellow, ref PrintStopLossText);
+
+                return true;
+            }
+
+            return false;
+        }
+        private bool SendSExitStopLoss()
+        {
+            // reset after long exit
+            if (MarketPosition[1] < 0 && MarketPosition[0] >= 0)
+            {
+                // reset data and return false
+                NumOfEntries = 0;
+                RiskValue = StopLossPrice = 0;
+                PrintEntryText = PrintStopLossText = false;
+                SEntryPrice = PrevSEntryPrice = 0;
+
+                return false;
+            }
+
+            if (StopLossPrice > 0 && MarketPosition[0] < 0)
+            {
+                double channel = HighestHigh(FastChannelLength);
+
+                // if close moves into 1 unit of profits, non-retracing
+                StopLossPrice = Math.Min(StopLossPrice, channel);
+
+                // print stop loss line
+                PlotStrategyOrderOnChart("SL", StopLossPrice, Color.Yellow, ref PrintStopLossText);
+
+                return true;
+            }
+
+            return false;
+        }
+
+        private bool SendLxStp()
+        {
+            // reset after long exit
+            if (MarketPosition[1] > 0 && MarketPosition[0] <= 0)
+            {
+                // reset data and return false
+                NumOfEntries = 0;
+                RiskValue = StopLossPrice = 0;
+                PrintStopLossText = false;
+
+                return false;
+            }
+
+            if (StopLossPrice > 0 && MarketPosition[0] > 0)
+            {
+                double channel = LowestLow(FastChannelLength);
+
+                // if close moves into 1 unit of profits, non-retracing
+                StopLossPrice = Math.Max(StopLossPrice, channel);
+
+                // print stop loss line
+                PlotStrategyOrderOnChart("SL", StopLossPrice, Color.Yellow, ref PrintStopLossText);
+
+                return true;
+            }
+
+            return false;
+        }
         private double MovingAverage(int length)
         {
             // include current close
@@ -105,7 +458,6 @@ namespace PowerLanguage.Strategy
 
             return ret;
         }
-
         private double LowestLow(int length)
         {
             double ret = double.MaxValue;
@@ -118,16 +470,42 @@ namespace PowerLanguage.Strategy
         }
         #endregion
 
-        #region Plot
+        #region Plots
+        private void PlotStrategyOrderOnChart(string text, double price, Color color, ref bool Once)
+        {
+            bool closingTick = Bars.Status == EBarState.Close;
+            bool optimization = Environment.Optimizing;
+
+            // plot on closing tick, and avoid drwing during optimization
+            if (closingTick == false || optimization) return;
+
+            ChartPoint point = new ChartPoint(Bars.Time[0], price);
+            ITextObject order = DrwText.Create(point, "-");
+            order.Color = color;
+
+            double onePip = (Bars.Info.BigPointValue / Bars.Info.PriceScale) * 10;
+
+            // print the stop loss text only once
+            if (Once == false)
+            {
+                Once = true;
+                point.Price = price + (2 * onePip);
+
+                ITextObject txt = DrwText.Create(point, text);
+                txt.Color = color;
+            }
+        }
         private void PlotStrategy()
         {
+            if (Environment.Optimizing) return;
+
             // good way to test if internal function is working visually
-            StrategyInfo.SetPlotValue(1, HighestHigh(10));
-            StrategyInfo.SetPlotValue(11, HighestHigh(200));
-            StrategyInfo.SetPlotValue(2, LowestLow(10));
-            StrategyInfo.SetPlotValue(12, LowestLow(200));
+            StrategyInfo.SetPlotValue(1, HighestHigh(SlowChannelLength));
+            StrategyInfo.SetPlotValue(11, HighestHigh(FastChannelLength));
+            StrategyInfo.SetPlotValue(2, LowestLow(SlowChannelLength));
+            StrategyInfo.SetPlotValue(12, LowestLow(FastChannelLength));
             StrategyInfo.SetPlotValue(3, MovingAverage(200));
-            StrategyInfo.SetPlotValue(10, ATR(14));
+            StrategyInfo.SetPlotValue(10, ATR(AtrLength));
         }
         #endregion
 
@@ -147,32 +525,25 @@ namespace PowerLanguage.Strategy
                 Bars.TimeValue.ToString("dd-MM-yy HH:mm:ss tt"),
                 message);
         }
-        private void Print(string message, int chartbarNum)
-        {
-            int maxbars = ExecInfo.MaxBarsBack;
-            if (Bars.CurrentBar == chartbarNum - maxbars)
-                Print(message);
-        }
         #endregion
     }
-}
 
-namespace PowerLanguage.Function
-{
-    public sealed class TradePlan : FunctionSimple<int>
+    #region TurtleTrading_v10
+    public class __SherNing_TurtleTrading_v10 : SignalObject
     {
         #region Documentations
         //=========================================================================================
-        // Project Name : Trade Plan Practice
-        // Requirements : 1. Entry Order Types (Stop, limit, stop limit orders)
-        //                2. 1 to 3 profit exits, and 1 stop loss
-        //                3. Send an entry, one at a time up to 3 entries max
+        // Project Name : Turtle Trading System
+        // Requirements : 1. Scale-in 3 Entries (NextBar Mkt Entries)
+        //                2. Trailing Exit - Donchian 10 
+        //                3. Stop Loss - 2 X ATR
+        //                4. Enchance Version. Not original
         //
-        // Type         : Function
+        // Type         : Strategy (IOG.Disabled)
         // Version      : v1.0
-        // Date         : 30 - Aug - 2020
+        // Date         : 03 - Sep - 2020
         // Time Taken   : 
-        // Remarks      : Requirements, Architecture, Development, Optimization, Maintenance
+        // Remarks      : Requirements, Design, Development, Optimization, Maintenance
         //=========================================================================================
         // Copyright    : 2020, Sher Ning Quantitative Technologies           
         // License      :
@@ -182,11 +553,19 @@ namespace PowerLanguage.Function
 
         /*/
          *----------------------------------- Version Objectives ----------------------------------
-         *  1.0.0 - User Interface Requirements and programming architecture
-         *  1.0.1 - Entry Structure
-         *  1.0.2 - Profit Structure
-         *  1.0.3 - StopLoss Structure
-         *  1.0.4 - Design a new approach to developing software
+         *  1.0.0 - Requirements
+         *  1.0.1 - Design
+         *        - MaxBarBacks must be set in strategy properties
+         *        - Add and test various components required to build Turtle Strategy
+         *        - Develop code in the most efficient and effective manners
+         *        - Functions are tools in my arsenal, I do not necessarily need to use them
+         *        - Good programming is about code reusability
+         *  1.0.2 - Develop LE Mkt and LX Stp entries
+         *  1.0.3 - Develop LE Stp entries
+         *        - IOG.Enabled is used if ENTRY requires intra bar calculation
+         *        - IOG.Enabled is used if you need to track intrabar MP
+         *        - Test with 200 MA
+         *        
          * ---------------------------------- Version Objectives ----------------------------------
         /*/
 
@@ -199,362 +578,355 @@ namespace PowerLanguage.Function
         #endregion
 
         #region Properties
-        public int HowManyEntries { get; set; }
-        public int HowManyProfitTargets { get; set; }
-        public TradePlan(CStudyControl m, EMarketPositionSide side) : base(m)
+        [Input] public int FastChannelLength { get; set; }
+        [Input] public int SlowChannelLength { get; set; }
+        [Input] public int AtrLength { get; set; }
+        [Input] public int MaxNumOfEntries { get; set; }
+        public __SherNing_TurtleTrading_v10(object _ctx) : base(_ctx)
         {
-            // set position side during object initialization
-            PosSide = side;
+            FastChannelLength = 10;
+            SlowChannelLength = 20;
+            AtrLength = 14;
+            MaxNumOfEntries = 3;
+        }
+        #endregion
 
-            // by default, set 3 entries and 3 profit targets
-            HowManyEntries = 3;
-            HowManyProfitTargets = 3;
+        #region References
+        VariableSeries<int> MarketPosition;
+        IOrderMarket LeMkt, SeMkt;
+        IOrderPriced LxStp, SxStp;
+        IOrderPriced LeStp, SeStp;
+        protected override void Create()
+        {
+            MarketPosition = new VariableSeries<int>(this);
+
+            // strategy orders
+            LeMkt = OrderCreator.MarketNextBar(new SOrderParameters(
+                Contracts.UserSpecified, "LE", EOrderAction.Buy));
+
+            // default is from all
+            LxStp = OrderCreator.Stop(new SOrderParameters(
+                Contracts.UserSpecified, "LX", EOrderAction.Sell, OrderExit.FromAll));
+
+
+            // using stop entries
+            LeStp = OrderCreator.Stop(new SOrderParameters(
+                Contracts.UserSpecified, "LE_Stp", EOrderAction.Buy));
+
+            // clear during debug
+            Output.Clear();
         }
         #endregion
 
         #region Fields
-        EMarketPositionSide PosSide;
-        EntryStruct[] Entry;
-        ProfitStruct[] Profit;
-        StopLossStruct StopLoss;
-        int[] TickNum;
+        int NumOfEntries;
+        double RiskValue;
+        double PrevEntryPrice, EntryPrice, StopLossPrice;
+        bool PrintStopLossText, PrintEntryText;
         protected override void StartCalc()
         {
-            // entry - 3 entries, avoid [0]
-            Entry = new EntryStruct[HowManyEntries + 1];
-            for (int i = 0; i < Entry.Length; i++)
-                Entry[i] = new EntryStruct();
-
-            // exit - 3 profit targets, avoid [0]
-            Profit = new ProfitStruct[HowManyProfitTargets + 1];
-            for (int i = 0; i < Profit.Length; i++)
-                Profit[i] = new ProfitStruct();
-
-            // stop loss
-            StopLoss = new StopLossStruct();
-
-            // tick count, curr = TickNum[0], prev = TickNum[1]
-            TickNum = new int[2];
+            // assign inputs 
+            NumOfEntries = 0;
+            RiskValue = StopLossPrice = 0;
+            PrevEntryPrice = 0;
+            PrintEntryText = PrintStopLossText = false;
         }
+        private void PrintState()
+        {
+            // framework for print strategy state
+            Print("---------------------- Start ----------------------");
 
+            // standard strategy info
+            Print("Bar Number: " + (Bars.CurrentBar + ExecInfo.MaxBarsBack));
+            Print("Bar Status: " + Bars.Status);
+            Output.WriteLine("");
+
+            // bar info
+            Print("High: " + Bars.High[0]);
+            Print("Low: " + Bars.Low[0]);
+            Print("Open: " + Bars.Open[0]);
+            Print("Close: " + Bars.Close[0]);
+            Output.WriteLine("");
+
+            // strategy state
+            Print("Market Position: " + MarketPosition[0]);
+            Print("Num Of Entries: " + NumOfEntries);
+            Print("Risk Value: " + RiskValue);
+            Print("Prev Entry Price: " + PrevEntryPrice);
+            Print("StopLoss Price: " + StopLossPrice);
+
+
+            Print("----------------------- End -----------------------");
+            Output.WriteLine("");
+            Output.WriteLine("");
+        }
+        private void PrintState(int chartBarNum)
+        {
+            if (Bars.CurrentBar + ExecInfo.MaxBarsBack == chartBarNum)
+                PrintState();
+        }
         #endregion
 
         #region Main
-        protected override int CalcBar()
+        protected override void CalcBar()
         {
-            // increment tick count
-            if (Environment.IOGEnabled) TickNum[0]++;
-            else TickNum[0] = Bars.CurrentBar;
+            // track market position at the start of calculations
+            MarketPosition.Value = StrategyInfo.MarketPosition;
 
-            Entry[1].Lock = true;
-            Entry[1].Price = Bars.Close[0];
+            // send long entry
+            //if (SendLeMkt()) LeMkt.Send(100000);
 
-            if (Bars.CurrentBar < 55)
-            {
-                Print("Entry Price: " + Entry[1].Price);
-            }
+            // send stop loss 
+            //if (SendLxStp()) LxStp.Send(StopLossPrice, MarketPosition[0]);
 
-            // assign prev tick curr value
-            TickNum[1] = TickNum[0];
-            return 0;
-        }
-        #endregion
+            if (SendLeStp()) LeStp.Send(EntryPrice, 100000);
 
-        #region Public Methods
-        public void SetMarketOrder(double price, int contracts)
-        {
+            if (SendLxStpForLeStp()) LxStp.Send(StopLossPrice, MarketPosition[0]);
 
-        }
-        public void SetLimitOrder(double price, int contracts, int timeInForce = 999)
-        {
-            int i;
+            PrintState(540);
 
-            // check for an empty entry slot, and set entry properties
-            for (i = 1; i < Entry.Length; i++)
-            {
-                if (Entry[i].OrderFilled == false)
-                {
-                    Entry[i].LimitPrice = Entry[i].Price = price;
-                    Entry[i].Quantity = contracts;
-                    Entry[i].TimeInForce = timeInForce;
-                    Entry[i].OrderType = OrderType.Limit;
-                    break;
-                }
-            }
-        }
-
-        public void SetStopOrder(double price, int contracts, int timeInForce = 999)
-        {
-            int i;
-
-            // check for an empty entry slot, and set entry properties
-            for (i = 1; i < Entry.Length; i++)
-            {
-                if (Entry[i].OrderFilled == false)
-                {
-                    Entry[i].StopPrice = Entry[i].Price = price;
-                    Entry[i].Quantity = contracts;
-                    Entry[i].TimeInForce = timeInForce;
-                    Entry[i].OrderType = OrderType.Stop;
-                    break;
-                }
-            }
-        }
-
-        public void SetStopLimitOrder(double stopPrice, double limitPrice, int contracts, int timeInForce = 999)
-        {
-            int i;
-
-            // check for an empty entry slot, and set entry properties
-            for (i = 1; i < Entry.Length; i++)
-            {
-                if (Entry[i].OrderFilled == false)
-                {
-                    Entry[i].StopPrice = stopPrice;
-                    Entry[i].LimitPrice = limitPrice;
-                    Entry[i].Quantity = contracts;
-                    Entry[i].TimeInForce = timeInForce;
-                    Entry[i].OrderType = OrderType.Stop;
-                    break;
-                }
-            }
+            PlotStrategy();
         }
         #endregion
 
         #region Private Methods
-        private void LongPositionManager()
+        private bool SendLeMkt()
         {
+            double channel = HighestHigh(SlowChannelLength);
 
-        }
+            // max 3 entries, max contracts set with strategy properties
+            bool maxEntries = NumOfEntries < MaxNumOfEntries;
 
-        private void LongEntryManager()
-        {
-
-        }
-
-        private void LongExitManager()
-        {
-
-        }
-
-        private void ShortPositionManager()
-        {
-
-        }
-
-        private void ShortEntryManager()
-        {
-
-        }
-
-        private void ShortExitManager()
-        {
-
-        }
-        #endregion
-
-        #region Internal Data Structure
-        interface IOrderInfo
-        {
-            string Name { get; set; }
-            Color OrderColor { get; set; }
-            double Price { get; set; }
-            int Quantity { get; set; }
-            bool PrintTextOnce { get; set; }
-            bool Send { get; }
-            bool CancelOrder { get; set; }
-            bool Lock { get; set; }
-        }
-        enum OrderType
-        {
-            // use inside TradePlan function only
-            Stop, Limit, StopLimit
-        }
-
-        struct EntryStruct : IOrderInfo
-        {
-            // entry prices
-            public double Price
-            {
-                get
-                {
-                    return Pricef;
-                }
-                set
-                {
-                    // lock price
-                    if (Lock)
-                    {
-                        if (EntryPriceLockf == false)
-                        {
-                            Pricef = value;
-                            EntryPriceLockf = true;
-                        }
-                    }
-
-                    // float price
-                    else Pricef = value;
-                }
-            }
-            public double StopPrice
-            {
-                get
-                {
-                    return StopPricef;
-                }
-                set
-                {
-                    // lock price
-                    if (Lock)
-                    {
-                        if (StopPriceLockf == false)
-                        {
-                            StopPricef = value;
-                            StopPriceLockf = true;
-                        }
-                    }
-
-                    // float price
-                    else StopPricef = value;
-                }
-            }
-            public double LimitPrice
-            {
-                get
-                {
-                    return LimitPricef;
-                }
-                set
-                {
-                    // lock price
-                    if (Lock)
-                    {
-                        if (LimitPriceLockf == false)
-                        {
-                            LimitPricef = value;
-                            LimitPriceLockf = true;
-                        }
-                    }
-
-                    // float price
-                    else LimitPricef = value;
-                }
-            }
-            public int Quantity
-            {
-                get
-                {
-                    return Qtyf;
-                }
-                set
-                {
-                    // lock price
-                    if (Lock)
-                    {
-                        if (QtyLockf == false)
-                        {
-                            Qtyf = value;
-                            QtyLockf = true;
-                        }
-                    }
-
-                    // float price
-                    else Qtyf = value;
-                }
-            }
-            public int TimeInForce
-            {
-                get
-                {
-                    return TimeInForcef;
-                }
-                set
-                {
-                    // lock price
-                    if (Lock)
-                    {
-                        if (TimeInForceLockf == false)
-                        {
-                            TimeInForcef = value;
-                            TimeInForceLockf = true;
-                        }
-                    }
-
-                    // float price
-                    else TimeInForcef = value;
-                }
-            }
-
+            // if it is the previous entry was flat or short
+            bool firstEntry = MarketPosition[1] <= 0 && MarketPosition[0] == 0;
 
             // entry info
-            public string Name { get; set; }
-            public Color OrderColor { get; set; }
-            public int TickNumber { get; set; }
-            public OrderType OrderType { get; set; }
+            double close = Bars.Close[0];
 
-
-            // entry state
-            public bool Send { get; private set; }
-            public bool CancelOrder { get; set; }
-            public bool Conditions
+            // if end of bar close is above or touching the channel
+            if (close >= channel && maxEntries)
             {
-                set
+                // check if first entry
+                if (firstEntry)
                 {
-                    if (value)
-                    {
-                        OrderFilled = true;
-                        Send = true;
-                    }
+                    // initial stop loss value
+                    RiskValue = ATR(AtrLength) * 2;
+                    StopLossPrice = close - RiskValue;
+                    PrevEntryPrice = close;
+                    NumOfEntries++;
+
+                    return true;
+                }
+
+                // second and third entry, one risk value away
+                if (MarketPosition[0] > 0 && close >= (PrevEntryPrice + RiskValue))
+                {
+                    PrevEntryPrice = close;
+                    NumOfEntries++;
+                    return true;
                 }
             }
 
-            // entry settings
-            public bool Lock { get; set; }
-            public bool PrintTextOnce { get; set; }
-            public bool OrderFilled { get; private set; }
+            return false;
+        }
+        private bool SendLeStp()
+        {
+            int mp = MarketPosition[0];
 
-            // fields (postfix f for fields)
-            double Pricef, StopPricef, LimitPricef;
-            int Qtyf, TimeInForcef;
-            bool EntryPriceLockf, StopPriceLockf, LimitPriceLockf;
-            bool TimeInForceLockf, QtyLockf;
+            // if negative return false
+            if (mp < 0) return false;
 
-            // public methods
-            public void Reset()
+            double channel = HighestHigh(FastChannelLength);
+            bool firstEntry = MarketPosition[1] <= 0 && mp == 0;
+            bool firstEntryFilled = MarketPosition[1] <= 0 && mp > 0;
+            bool newEntry = mp > 0 && mp - MarketPosition[1] > 0;
+            bool maCondition = Bars.Low[0] >= MovingAverage(200);
+
+            // first entry price = channel high
+            if (firstEntry && maCondition)
             {
-                Pricef = StopPricef = LimitPricef = 0;
-                EntryPriceLockf = StopPriceLockf = LimitPriceLockf = false;
-                OrderFilled = Send = false;
+                EntryPrice = channel;
+                //PlotStrategyOrderOnChart("LE 1", EntryPrice, Color.DarkGreen, ref PrintEntryText);
+                return true;
             }
+
+            // check when the first entry is filled
+            if (firstEntryFilled)
+            {
+                RiskValue = ATR(AtrLength) * 2;
+                StopLossPrice = EntryPrice - RiskValue;
+                PrevEntryPrice = EntryPrice;
+                NumOfEntries++;
+            }
+
+            // second entries onwards
+            if (NumOfEntries < MaxNumOfEntries && mp > 0 && MarketPosition[1] > 0)
+            {
+                // new entry detected
+                if (newEntry)
+                {
+                    // update new price
+                    PrevEntryPrice = EntryPrice;
+                    PrintEntryText = false;
+                    NumOfEntries++;
+                }
+
+                EntryPrice = PrevEntryPrice + RiskValue;
+
+                if (NumOfEntries < MaxNumOfEntries && maCondition)
+                {
+                    // plot order lines on chart
+                    PlotStrategyOrderOnChart
+                        ("LE " + (NumOfEntries + 1), EntryPrice, Color.DarkGreen, ref PrintEntryText);
+                    return true;
+                }
+                else
+                {
+                    return false;
+                }
+
+            }
+
+            return false;
         }
-        struct ProfitStruct : IOrderInfo
+        private bool SendLxStpForLeStp()
         {
-            public double Price { get; set; }
-            public int Quantity { get; set; }
-            public int TickNumber { get; set; }
-            public string Name { get; set; }
-            public Color OrderColor { get; set; }
-            public bool Send { get; set; }
-            public bool CancelOrder { get; set; }
-            public bool PrintTextOnce { get; set; }
-            public bool Lock { get; set; }
-        }
-        struct StopLossStruct : IOrderInfo
-        {
-            public double Price { get; set; }
-            public int Quantity { get; set; }
-            public int TickNumber { get; set; }
-            public string Name { get; set; }
-            public Color OrderColor { get; set; }
-            public bool Send { get; set; }
-            public bool CancelOrder { get; set; }
-            public bool PrintTextOnce { get; set; }
-            public bool Lock { get; set; }
+            // reset after long exit
+            if (MarketPosition[1] > 0 && MarketPosition[0] <= 0)
+            {
+                // reset data and return false
+                NumOfEntries = 0;
+                RiskValue = StopLossPrice = 0;
+                PrintEntryText = PrintStopLossText = false;
+                EntryPrice = PrevEntryPrice = 0;
+
+                return false;
+            }
+
+            if (StopLossPrice > 0 && MarketPosition[0] > 0)
+            {
+                double channel = LowestLow(FastChannelLength);
+
+                // if close moves into 1 unit of profits, non-retracing
+                StopLossPrice = Math.Max(StopLossPrice, channel);
+
+                // print stop loss line
+                PlotStrategyOrderOnChart("SL", StopLossPrice, Color.Yellow, ref PrintStopLossText);
+
+                return true;
+            }
+
+            return false;
         }
 
+        private bool SendLxStp()
+        {
+            // reset after long exit
+            if (MarketPosition[1] > 0 && MarketPosition[0] <= 0)
+            {
+                // reset data and return false
+                NumOfEntries = 0;
+                RiskValue = StopLossPrice = 0;
+                PrintStopLossText = false;
+
+                return false;
+            }
+
+            if (StopLossPrice > 0 && MarketPosition[0] > 0)
+            {
+                double channel = LowestLow(FastChannelLength);
+
+                // if close moves into 1 unit of profits, non-retracing
+                StopLossPrice = Math.Max(StopLossPrice, channel);
+
+                // print stop loss line
+                PlotStrategyOrderOnChart("SL", StopLossPrice, Color.Yellow, ref PrintStopLossText);
+
+                return true;
+            }
+
+            return false;
+        }
+        private double MovingAverage(int length)
+        {
+            // include current close
+            double sum = 0;
+            for (int i = 0; i < length; i++)
+                sum += Bars.Close[i];
+
+            return sum / length;
+        }
+        private double ATR(int length)
+        {
+            // deafult ATR calculations includes current bar
+            double sum = 0;
+
+            // i is bars back
+            for (int i = 0; i < length; i++)
+                sum += Bars.Range(i);
+
+            return sum / length;
+        }
+        private double HighestHigh(int length)
+        {
+            double ret = 0;
+
+            // exclude current high
+            for (int i = 1; i < length; i++)
+                ret = Math.Max(ret, Bars.High[i]);
+
+            return ret;
+        }
+        private double LowestLow(int length)
+        {
+            double ret = double.MaxValue;
+
+            // exclude current high
+            for (int i = 1; i < length; i++)
+                ret = Math.Min(ret, Bars.Low[i]);
+
+            return ret;
+        }
         #endregion
 
-        #region Print Functions
+        #region Plots
+        private void PlotStrategyOrderOnChart(string text, double price, Color color, ref bool Once)
+        {
+            bool closingTick = Bars.Status == EBarState.Close;
+            bool optimization = Environment.Optimizing;
+
+            // plot on closing tick and NOT during optimization
+            if (closingTick == false && optimization == false) return;
+
+            ChartPoint point = new ChartPoint(Bars.Time[0], price);
+            ITextObject order = DrwText.Create(point, "-");
+            order.Color = color;
+
+            double onePip = (Bars.Info.BigPointValue / Bars.Info.PriceScale) * 10;
+
+            // print the stop loss text only once
+            if (Once == false)
+            {
+                Once = true;
+                point.Price = price + (2 * onePip);
+
+                ITextObject txt = DrwText.Create(point, text);
+                txt.Color = color;
+            }
+        }
+        private void PlotStrategy()
+        {
+            // good way to test if internal function is working visually
+            StrategyInfo.SetPlotValue(1, HighestHigh(SlowChannelLength));
+            StrategyInfo.SetPlotValue(11, HighestHigh(FastChannelLength));
+            StrategyInfo.SetPlotValue(2, LowestLow(SlowChannelLength));
+            StrategyInfo.SetPlotValue(12, LowestLow(FastChannelLength));
+            StrategyInfo.SetPlotValue(3, MovingAverage(200));
+            StrategyInfo.SetPlotValue(10, ATR(AtrLength));
+        }
+        #endregion
+
+        #region Print
         private bool DebugMode = true;
         private void Print(string message)
         {
@@ -570,12 +942,10 @@ namespace PowerLanguage.Function
                 Bars.TimeValue.ToString("dd-MM-yy HH:mm:ss tt"),
                 message);
         }
-        private void Print(string message, int chartbarNum)
-        {
-            int maxbars = ExecInfo.MaxBarsBack;
-            if (Bars.CurrentBar == chartbarNum - maxbars)
-                Print(message);
-        }
         #endregion
     }
+
+    #endregion
+
 }
+
