@@ -42,7 +42,7 @@ namespace PowerLanguage.Strategy
          *  
          *  1.0.0 - Requirements
          *  1.0.1 - Design
-         *        - MaxBarBacks must be set in strategy properties
+         *        - MaxBarBacks must be set in strategy properties manually
          *        - Add and test various components required to build Turtle Strategy
          *        - Develop code in the most efficient and effective manners
          *        - Functions are tools in my arsenal, I do not necessarily need to use them
@@ -50,8 +50,9 @@ namespace PowerLanguage.Strategy
          *  1.0.2 - Develop LE Mkt and LX Stp entries
          *  1.0.3 - Develop LE Stp entries
          *        - IOG.Enabled is used if ENTRY requires intra bar calculation
-         *        - IOG.Enabled is used if you need to track intrabar MP
+         *        - Track price and market position
          *        - Test with 200 MA
+         *  1.0.4 - Test StpLimit, Stp is the trigger, limit is the entry type      
          *------------------------------------ Versions History -----------------------------------
         /*/
 
@@ -76,6 +77,7 @@ namespace PowerLanguage.Strategy
         IOrderMarket LeMkt, SeMkt;
         IOrderPriced LxStp, SxStp;
         IOrderPriced LeStp, SeStp;
+        IOrderStopLimit LeStpLmt, SeStpLmt;
         protected override void Create()
         {
             MarketPosition = new VariableSeries<int>(this);
@@ -99,6 +101,14 @@ namespace PowerLanguage.Strategy
             SeStp = OrderCreator.Stop(new SOrderParameters(
                 Contracts.UserSpecified, "SE_Stp", EOrderAction.SellShort));
 
+            // using stop limit orders, stop will be known as the trigger price
+            // essentially stop limit is a limit order with trigger price
+            LeStpLmt = OrderCreator.StopLimit(new SOrderParameters(
+                Contracts.UserSpecified, "LE_StpLmt", EOrderAction.Buy));
+
+            SeStpLmt = OrderCreator.StopLimit(new SOrderParameters(
+                Contracts.UserSpecified, "SE_StpLmt", EOrderAction.SellShort));
+
             // clear during debug
             Output.Clear();
         }
@@ -110,6 +120,7 @@ namespace PowerLanguage.Strategy
         double PrevLEntryPrice, LEntryPrice, StopLossPrice;
         double PrevSEntryPrice, SEntryPrice;
         bool PrintStopLossText, PrintEntryText;
+        double OnePip;
         protected override void StartCalc()
         {
             // assign inputs 
@@ -117,6 +128,8 @@ namespace PowerLanguage.Strategy
             RiskValue = StopLossPrice = 0;
             PrevLEntryPrice = 0;
             PrintEntryText = PrintStopLossText = false;
+
+            OnePip = (Bars.Info.BigPointValue / Bars.Info.PriceScale) * 10;
         }
         private void PrintState()
         {
@@ -125,6 +138,11 @@ namespace PowerLanguage.Strategy
 
             // standard strategy info
             Print("Bar Number: " + (Bars.CurrentBar + ExecInfo.MaxBarsBack));
+
+            // maxbarsback + 1 is when calcbar starts calculation. 
+            // if not enough data to reference, an exception will be thrown
+            // cannot set maxbarsback programmatically in a strategy
+            Print("MaxBarsBack: " + ExecInfo.MaxBarsBack);
             Print("Bar Status: " + Bars.Status);
             Output.WriteLine("");
 
@@ -166,15 +184,17 @@ namespace PowerLanguage.Strategy
             // send stop loss 
             //if (SendLxStp()) LxStp.Send(StopLossPrice, MarketPosition[0]);
 
-            if (SendLEntryStp()) LeStp.Send(LEntryPrice, 100000);
+            //if (SendLEntryStp()) LeStp.Send(LEntryPrice, 100000);
+            if (SendLEntryStp()) LeStpLmt.Send(LEntryPrice, LEntryPrice - (5 * OnePip), 100000);
 
             if (SendLExitStopLoss()) LxStp.Send(StopLossPrice, MarketPosition[0]);
 
-            if (SendSEntryStp()) SeStp.Send(SEntryPrice, 100000);
+            //if (SendSEntryStp()) SeStp.Send(SEntryPrice, 100000);
+            if (SendSEntryStp()) SeStpLmt.Send(SEntryPrice, SEntryPrice + (5 * OnePip), 100000);
 
             if (SendSExitStopLoss()) SxStp.Send(StopLossPrice, Math.Abs(MarketPosition[0]));
 
-            //PrintState(540);
+            PrintState(540);
 
             PlotStrategy();
         }
@@ -297,7 +317,6 @@ namespace PowerLanguage.Strategy
             if (firstEntry && maCondition)
             {
                 SEntryPrice = channel;
-                //PlotStrategyOrderOnChart("LE 1", EntryPrice, Color.DarkGreen, ref PrintEntryText);
                 return true;
             }
 
