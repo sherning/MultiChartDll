@@ -4,6 +4,7 @@ using System.Linq;
 using PowerLanguage.Function;
 using ATCenterProxy.interop;
 using System.Diagnostics;
+using System.Collections.Generic;
 
 namespace PowerLanguage.Strategy
 {
@@ -28,14 +29,16 @@ namespace PowerLanguage.Strategy
 
         /*/
          *----------------------------------- Version Objectives ----------------------------------
-         *  1.0.1 - Requirements
-         *        - Import and check key functions
+         *  1.0.2 - Research
+         *        - Frequency of pullbacks on different timeframes, symbols and intervals
+         *        
          * ---------------------------------- Version Objectives ----------------------------------
         /*/
 
         /*/
          *------------------------------------ Versions History -----------------------------------
-         *  
+         *  1.0.1 - Requirements
+         *        - Import and check key functions
          *------------------------------------ Versions History -----------------------------------
         /*/
 
@@ -48,7 +51,7 @@ namespace PowerLanguage.Strategy
         [Input] public string StrategySettings { get; set; }
         [Input] public int ChannelLength { get; set; }
 
-        public __SherNing_PriceActionMomentum(object _ctx) : base(_ctx) 
+        public __SherNing_PriceActionMomentum(object _ctx) : base(_ctx)
         {
             // default settings
             PamaSettings = "Pama Setting";
@@ -71,15 +74,35 @@ namespace PowerLanguage.Strategy
             Pama = new VariableSeries<double>[4];
             for (int i = 0; i < Pama.Length; i++)
                 Pama[i] = new VariableSeries<double>(this);
+
+            Output.Clear();
         }
         #endregion
 
         #region Fields
+
+        // research fields
+        int PivotFrequency;
+        int PositivePivotFreq;
+        int NegativePivotFreq;
+        int LongStopHit, ShortStopHit;
+        List<Data> PositivePivotList, NegativePivotList;
+
+
         protected override void StartCalc()
         {
             PamaFunction._Length = PamaLength;
             PamaFunction._Smooth = PamaSmooth;
             PamaFunction._PriceType = 1;
+
+            // reseach fields
+            PivotFrequency = 0;
+            PositivePivotFreq = NegativePivotFreq = 0;
+
+            PositivePivotList = new List<Data>();
+            NegativePivotList = new List<Data>();
+
+            LongStopHit = ShortStopHit = 0;
         }
         #endregion
 
@@ -95,7 +118,196 @@ namespace PowerLanguage.Strategy
 
             PamaFunction.Call();
 
+            // research
+            //FrequencyOfPivots();
+            FreqOfStopLossHit(5, 50);
+
             PlotStrategyInfo();
+        }
+        #endregion
+
+        #region Reseach
+        private void FrequencyOfPivots()
+        {
+            if (PositivePivot() || NegativePivot())
+            {
+                PivotFrequency++;
+
+                if (PositivePivot())
+                {
+                    DrwArrow.Create(new ChartPoint(Bars.Time[1], Bars.Low[1]), false);
+                    PositivePivotFreq++;
+                }
+
+                if (NegativePivot())
+                {
+                    DrwArrow.Create(new ChartPoint(Bars.Time[1], Bars.High[1]), true);
+                    NegativePivotFreq++;
+                }
+            }
+
+            if (Bars.LastBarOnChart)
+            {
+                Print("Pivot Frequency: " + PivotFrequency);
+                Print("Positive Pivot Freq: " + PositivePivotFreq);
+                Print("Negative Pivot Freq: " + NegativePivotFreq);
+            }
+        }
+        private void FreqOfStopLossHit(int length, int period)
+        {
+            //if (Bars.Time[0] < new DateTime(2020,08,31)) return;
+            if (PositivePivot() || NegativePivot())
+            {
+                PivotFrequency++;
+            }
+
+            if (PositivePivot())
+            {
+                PositivePivotList.Add(new Data(LowestLowCurrent(length), period));
+                //DrwArrow.Create(new ChartPoint(Bars.Time[1], Bars.Low[1]), false);
+                PositivePivotFreq++;
+            }
+
+            if (NegativePivot())
+            {
+                NegativePivotList.Add(new Data(HighestHighCurrent(length), period));
+                //DrwArrow.Create(new ChartPoint(Bars.Time[1], Bars.High[1]), true);
+                NegativePivotFreq++;
+            }
+
+            for (int i = 0; i < PositivePivotList.Count; i++)
+            {
+                // count down
+                PositivePivotList[i].BarRemaining--;
+
+                if (PositivePivotList[i].BarRemaining > 0)
+                {
+                    // check the past bars low
+                    if (Bars.Low[0] < PositivePivotList[i].Price
+                        && PositivePivotList[i].BarRemaining < (period - 1))
+                    {
+                        LongStopHit++;
+                        //Print("Long Stop Hit!");
+                        //Print("Stop Loss Price: " + PositivePivotList[i].Price);
+                        //Print("Bars Remaining: " + PositivePivotList[i].BarRemaining);
+                        //Output.WriteLine("");
+                        PositivePivotList.RemoveAt(i);
+                        continue;
+                    }
+                }
+
+                if (PositivePivotList[i].BarRemaining == 0)
+                {
+                    PositivePivotList.RemoveAt(i);
+                }
+            }
+
+            for (int i = 0; i < NegativePivotList.Count; i++)
+            {
+                // count down
+                NegativePivotList[i].BarRemaining--;
+
+                if (NegativePivotList[i].BarRemaining > 0)
+                {
+                    // check the past bars low
+                    if (Bars.High[0] > NegativePivotList[i].Price
+                        && NegativePivotList[i].BarRemaining < (period - 1))
+                    {
+                        ShortStopHit++;
+                        //Print("Short Stop Hit!");
+                        //Print("Stop Loss Price: " + NegativePivotList[i].Price);
+                        //Print("Bars Remaining: " + NegativePivotList[i].BarRemaining);
+                        //Output.WriteLine("");
+                        NegativePivotList.RemoveAt(i);
+                        continue;
+                    }
+                }
+
+                if (NegativePivotList[i].BarRemaining == 0)
+                {
+                    NegativePivotList.RemoveAt(i);
+                }
+            }
+
+            if (Bars.LastBarOnChart)
+            {
+                Print("Long Stop Hit: " + LongStopHit);
+                Print("Short Stop Hit: " + ShortStopHit);
+                Print("Positive Pivot Freq: " + PositivePivotFreq);
+                Print("Negative Pivot Freq: " + NegativePivotFreq);
+                Print("Long Hit Rate: " + (LongStopHit * 100 / PositivePivotFreq));
+                Print("Short Hit Rate: " + (ShortStopHit * 100 / NegativePivotFreq));
+                Print("Pivot Frequency: " + PivotFrequency);
+            }
+        }
+        private void FreqOfStopLossHitv10(int length, int period)
+        {
+            if (Bars.Time[0] < new DateTime(2020, 08, 31)) return;
+
+            if (PositivePivot())
+            {
+                PositivePivotList.Add(new Data(LowestLow(length), period));
+                DrwArrow.Create(new ChartPoint(Bars.Time[1], Bars.Low[1]), false);
+
+                PositivePivotFreq++;
+            }
+
+            if (NegativePivot())
+            {
+                NegativePivotList.Add(new Data(HighestHigh(length), period));
+                DrwArrow.Create(new ChartPoint(Bars.Time[1], Bars.High[1]), true);
+
+                NegativePivotFreq++;
+            }
+
+            for (int i = 0; i < PositivePivotList.Count; i++)
+            {
+                // count down
+                PositivePivotList[i].BarRemaining--;
+
+                if (PositivePivotList[i].BarRemaining == 0)
+                {
+                    // check the past bars low
+                    if (LowestLow(period) < PositivePivotList[i].Price)
+                        LongStopHit++;
+
+                    PositivePivotList.RemoveAt(i);
+                }
+            }
+
+            for (int i = 0; i < NegativePivotList.Count; i++)
+            {
+                NegativePivotList[i].BarRemaining--;
+
+                if (NegativePivotList[i].BarRemaining == 0)
+                {
+                    // check the past bars low
+                    if (HighestHigh(period) > NegativePivotList[i].Price)
+                        ShortStopHit++;
+
+                    NegativePivotList.RemoveAt(i);
+                }
+            }
+
+            if (Bars.LastBarOnChart)
+            {
+                Print("Long Stop Hit: " + LongStopHit);
+                Print("Short Stop Hit: " + ShortStopHit);
+                Print("Positive Pivot Freq: " + PositivePivotFreq);
+                Print("Negative Pivot Freq: " + NegativePivotFreq);
+            }
+        }
+
+        private bool PositivePivot()
+        {
+            // [2] > [1] < [0]
+            return Pama[1][2] > Pama[1][1] && Pama[1][1] < Pama[1][0];
+        }
+
+        private bool NegativePivot()
+        {
+            // [2] < [1] > [0]
+            return Pama[1][2] < Pama[1][1] && Pama[1][1] > Pama[1][0];
         }
         #endregion
 
@@ -113,6 +325,24 @@ namespace PowerLanguage.Strategy
         {
             double ret = double.MaxValue;
             for (int i = 1; i < length; i++)
+                ret = Math.Min(ret, Bars.Low[i]);
+
+            return ret;
+        }
+
+        private double HighestHighCurrent(int length)
+        {
+            double ret = 0;
+            for (int i = 0; i <= length; i++)
+                ret = Math.Max(ret, Bars.High[i]);
+
+            return ret;
+        }
+
+        private double LowestLowCurrent(int length)
+        {
+            double ret = double.MaxValue;
+            for (int i = 0; i <= length; i++)
                 ret = Math.Min(ret, Bars.Low[i]);
 
             return ret;
@@ -148,6 +378,20 @@ namespace PowerLanguage.Strategy
                 stackTrace.GetFrame(1).GetMethod().Name,
                 Bars.TimeValue.ToString("dd-MM-yy HH:mm:ss tt"),
                 message);
+        }
+        #endregion
+
+        #region Data
+        class Data
+        {
+            public double Price { get; set; }
+            public int BarRemaining { get; set; }
+
+            public Data(double price, int barsLeft)
+            {
+                Price = price;
+                BarRemaining = barsLeft;
+            }
         }
         #endregion
     }
