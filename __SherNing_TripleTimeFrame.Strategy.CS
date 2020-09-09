@@ -34,7 +34,7 @@ namespace PowerLanguage.Strategy
          *  Use Strategy properties to set initial capital
          *  Use proper position sizing
          *  1.0.2 - Long Short Strategy with AutoPositionSizing
-         *        
+         *  1.0.3 - Optimization of strategy      
          * ---------------------------------- Version Objectives ----------------------------------
         /*/
 
@@ -51,9 +51,10 @@ namespace PowerLanguage.Strategy
         [Input] public int PamaLength { get; set; }
         [Input] public int PamaSmooth { get; set; }
         [Input] public string StrategySettings { get; set; }
-        [Input] public int ProfitFactor { get; set; }
+        [Input] public double ProfitFactor { get; set; }
         [Input] public int StopLossLength { get; set; }
         [Input] public double RiskPerTrade { get; set; }
+        [Input] public int AtrLength { get; set; }
         public __SherNing_TripleTimeFrame(object _ctx) : base(_ctx)
         {
             // default settings
@@ -65,6 +66,7 @@ namespace PowerLanguage.Strategy
             ProfitFactor = 3;
             StopLossLength = 5;
             RiskPerTrade = 0.5; // in %
+            AtrLength = 14;
         }
         #endregion
 
@@ -171,17 +173,17 @@ namespace PowerLanguage.Strategy
         #endregion
 
         #region Methods
-        private void SendLongEntry()
+        private bool LongEntryConditions()
         {
             // how many conditions ?
-            bool[] conditions = new bool[6];
+            bool[] conditions = new bool[1 + 8];
             conditions[0] = true;
 
-            // check if daily is green
+            // check if daily is green - important
             conditions[1] = PamaDir[3][0] == 1;
 
-            // check if 240 is red, for pullback
-            conditions[2] = PamaDir[2][0] == -1;
+            // check if 240 is red, for pullback - important
+            conditions[2] = PamaDir[2][0] == -1 || PamaDir[2][1] == -1;
 
             // check if a bar close above the 240 line
             conditions[3] = Bars.Low[0] > Pama[2][0];
@@ -192,9 +194,23 @@ namespace PowerLanguage.Strategy
             // check if market position is flat
             conditions[5] = MP[0] == 0;
 
+            // must be green bar
+            //conditions[6] = Bars.Open[0] < Bars.Close[0];
+            conditions[6] = true;
+
+            // spares
+            conditions[7] = true;
+            conditions[8] = true;
+
             // check if all conditions are satisfied
             for (int i = 0; i < conditions.Length; i++)
-                if (conditions[i] == false) return;
+                if (conditions[i] == false) return false;
+
+            return true;
+        }
+        private void SendLongEntry()
+        {
+            if (LongEntryConditions() == false) return;
 
             // --------------------- all conditions satisfied, send order --------------------- //
             double close = Bars.Close[0];
@@ -202,14 +218,18 @@ namespace PowerLanguage.Strategy
 
             // trade info
             EntryPrice = close;
-            StopLossPrice = LowestLow(StopLossLength);
-            Risk = EntryPrice - StopLossPrice;
+            //StopLossPrice = LowestLow(StopLossLength);
+            //Risk = EntryPrice - StopLossPrice;
+
+            // atr test
+            Risk = ATR(AtrLength) * 2;
+            StopLossPrice = EntryPrice - Risk;
 
             // check risk
             if (Risk > 50 * OnePip) Risk = 50 * OnePip;
 
             ProfitPrice = EntryPrice + (ProfitFactor * Risk);
-            TradeQty = RiskManagement(Risk);
+            TradeQty = PositionSizing(Risk);
 
             LEntry.Send(close, TradeQty);
         }
@@ -222,30 +242,28 @@ namespace PowerLanguage.Strategy
 
                 LProfit.Send(ProfitPrice, TradeQty);
                 PlotStrategyOrder(ProfitPrice, Color.Cyan);
-
-                //Print("Stoploss Price: " + StopLossPrice);
-                //Print("Profit Price: " + ProfitPrice);
             }
 
             // end of long trade
-            //else if (MP[0] <= 0 && MP[1] > 0)
+            //else if (MP[0] == 0 && MP[1] > 0)
             //{
             //    // reset trade info
             //    TradeQty = 0;
             //    Risk = EntryPrice = StopLossPrice = ProfitPrice = 0;
             //}
         }
-        private void SendShortEntry()
+        private bool ShortEntryConditions()
         {
+            // optimising 
             // how many conditions ?
-            bool[] conditions = new bool[6];
+            bool[] conditions = new bool[1 + 8];
             conditions[0] = true;
 
             // check if daily is red
             conditions[1] = PamaDir[3][0] == -1;
 
             // check if 240 is green, for pullback
-            conditions[2] = PamaDir[2][0] == 1;
+            conditions[2] = PamaDir[2][0] == 1 || PamaDir[2][1] == 1;
 
             // check if a bar high below the 240 line
             conditions[3] = Bars.High[0] < Pama[2][0];
@@ -256,9 +274,24 @@ namespace PowerLanguage.Strategy
             // check if market position is flat
             conditions[5] = MP[0] == 0;
 
+            // must be red bar
+            //conditions[6] = Bars.Open[0] > Bars.Close[0];
+            conditions[6] = true;
+
+            // spares
+            conditions[7] = true;
+            conditions[8] = true;
+
             // check if all conditions are satisfied
             for (int i = 0; i < conditions.Length; i++)
-                if (conditions[i] == false) return;
+                if (conditions[i] == false) return false;
+
+            return true;
+        }
+
+        private void SendShortEntry()
+        {
+            if (ShortEntryConditions() == false) return;
 
             // --------------------- all conditions satisfied, send order --------------------- //
             double close = Bars.Close[0];
@@ -266,13 +299,16 @@ namespace PowerLanguage.Strategy
 
             // trade info
             EntryPrice = close;
-            StopLossPrice = HighestHigh(StopLossLength);
-            Risk = Math.Abs(EntryPrice - StopLossPrice);
+            //StopLossPrice = HighestHigh(StopLossLength);
+            //Risk = Math.Abs(EntryPrice - StopLossPrice);
+
+            Risk = ATR(AtrLength) * 2;
+            StopLossPrice = EntryPrice + Risk;
 
             if (Risk > 50 * OnePip) Risk = 50 * OnePip;
 
             ProfitPrice = EntryPrice - (ProfitFactor * Risk);
-            TradeQty = RiskManagement(Risk);
+            TradeQty = PositionSizing(Risk);
 
             SEntry.Send(close, TradeQty);
         }
@@ -285,20 +321,17 @@ namespace PowerLanguage.Strategy
 
                 SProfit.Send(ProfitPrice, TradeQty);
                 PlotStrategyOrder(ProfitPrice, Color.Cyan);
-
-                //Print("Stoploss Price: " + StopLossPrice);
-                //Print("Profit Price: " + ProfitPrice);
             }
 
             // end of long trade
-            //else if (MP[0] >= 0 && MP[1] < 0)
+            //else if (MP[0] == 0 && MP[1] < 0)
             //{
-            //    // reset trade info
-            //    Risk = EntryPrice = StopLossPrice = ProfitPrice = 0;
+            //    //reset trade info
+            //   Risk = EntryPrice = StopLossPrice = ProfitPrice = 0;
             //    TradeQty = 0;
             //}
         }
-        private int RiskManagement(double risk)
+        private int PositionSizing(double risk)
         {
             // pull working capital
             double workingCapital = InitialCapital + NetProfit;
@@ -339,6 +372,15 @@ namespace PowerLanguage.Strategy
                 ret = Math.Max(ret, Bars.High[i]);
 
             return ret;
+        }
+        private double ATR(int length = 1)
+        {
+            double sum = 0;
+
+            for (int i = 0; i < length; i++)
+                sum += Bars.Range(i);
+
+            return sum / length;
         }
         private void ClosingTickPamaValues()
         {
