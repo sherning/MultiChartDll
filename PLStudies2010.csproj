@@ -352,6 +352,7 @@
     <Compile Include="__SherNing_PriceActionMomentum.Strategy.CS" />
     <Compile Include="__SherNing_TripleTimeFrame.Strategy.CS" />
     <Compile Include="__SherNing_MomentumRider.Indicator.CS" />
+    <Compile Include="__SherNing_SharpeRatio.Indicator.CS" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>
