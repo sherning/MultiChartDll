@@ -354,6 +354,8 @@
     <Compile Include="__SherNing_MomentumRider.Indicator.CS" />
     <Compile Include="__SherNing_SharpeRatio.Indicator.CS" />
     <Compile Include="__SherNing_DochianChannels.Indicator.CS" />
+    <Compile Include="__SherNing_Statistics.Indicator.CS" />
+    <Compile Include="__SN_DeleteMe.Indicator.CS" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

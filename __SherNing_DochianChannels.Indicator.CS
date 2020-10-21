@@ -97,6 +97,7 @@ namespace PowerLanguage.Indicator
                    3, EPlotStyle.Solid, true));
             }
 
+            Output.Clear();
         }
         #endregion
 
@@ -108,6 +109,7 @@ namespace PowerLanguage.Indicator
         }
         #endregion
 
+        #region Main
         protected override void CalcBar()
         {
             if (DisplayPlot1)
@@ -139,6 +141,8 @@ namespace PowerLanguage.Indicator
                 ChartPlots[6].Set(ChannelPrice[6]);
             }
         }
+
+        #endregion
 
         #region Methods
         private double HighestHigh(int length)
